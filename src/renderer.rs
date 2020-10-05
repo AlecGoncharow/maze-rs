@@ -2,6 +2,9 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
+unsafe impl bytemuck::Pod for Vertex {}
+unsafe impl bytemuck::Zeroable for Vertex {}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
@@ -15,7 +18,6 @@ impl Vertex {
             stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
-                // 3.
                 wgpu::VertexAttributeDescriptor {
                     offset: 0,
                     shader_location: 0,
@@ -46,6 +48,8 @@ const VERTICES: &[Vertex] = &[
     },
 ];
 
+const INDICES: &[u16] = &[0, 1, 2];
+
 pub struct GraphicsContext {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -59,6 +63,7 @@ pub struct GraphicsContext {
     pub(crate) command_encoder: Option<wgpu::CommandEncoder>,
     pub(crate) frame: Option<wgpu::SwapChainTexture>,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
 }
 
 impl GraphicsContext {
@@ -156,13 +161,16 @@ impl GraphicsContext {
             alpha_to_coverage_enabled: false,
         });
 
-        let new_len = core::mem::size_of_val(VERTICES) / core::mem::size_of::<u8>();
-        let vert_bytes =
-            unsafe { core::slice::from_raw_parts(VERTICES.as_ptr() as *const u8, new_len) };
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: vert_bytes,
+            contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsage::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsage::INDEX,
         });
 
         Self {
@@ -177,6 +185,7 @@ impl GraphicsContext {
             frame: None,
             command_encoder: None,
             vertex_buffer,
+            index_buffer,
         }
     }
 
@@ -219,20 +228,58 @@ impl GraphicsContext {
         });
         render_pass.set_pipeline(&self.render_pipeline);
 
-        let new_len = core::mem::size_of_val(verts) / core::mem::size_of::<u8>();
-        let vert_bytes =
-            unsafe { core::slice::from_raw_parts(verts.as_ptr() as *const u8, new_len) };
-
         self.vertex_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
-                contents: vert_bytes,
+                contents: bytemuck::cast_slice(&verts),
                 usage: wgpu::BufferUsage::VERTEX,
             });
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..verts.len() as u32, 0..1);
+        drop(render_pass);
+
+        self.frame = Some(frame);
+        self.command_encoder = Some(encoder);
+    }
+
+    pub fn draw_indexed(&mut self, verts: &[Vertex], indices: &[u16]) {
+        let mut encoder = self.command_encoder.take().unwrap();
+        let frame = self.frame.take().unwrap();
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: &frame.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(self.clear_color),
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: None,
+        });
+        render_pass.set_pipeline(&self.render_pipeline);
+
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsage::VERTEX,
+            });
+
+        self.index_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(indices),
+                usage: wgpu::BufferUsage::INDEX,
+            });
+
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..));
+        render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
         drop(render_pass);
 
         self.frame = Some(frame);

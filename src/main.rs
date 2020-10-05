@@ -14,15 +14,28 @@ pub struct State {
     gfx_ctx: GraphicsContext,
 }
 
-fn make_grid(rows: usize, cols: usize) -> Vec<Vertex> {
+fn make_grid(state: &State, rows: usize, cols: usize) -> Vec<Vertex> {
     let mut grid = Vec::new();
-    let sq_width = 2.0 / cols as f32;
-    let sq_height = 2.0 / rows as f32;
-
+    let ratio = state.gfx_ctx.size.width as f32 / state.gfx_ctx.size.height as f32;
+    let (sq_width, sq_height) = if ratio >= 1.0 {
+        (2.0 / cols as f32 / ratio, 2.0 / rows as f32)
+    } else {
+        (2.0 / cols as f32, 2.0 / rows as f32 * ratio)
+    };
     for row in 0..rows {
         for col in 0..cols {
             let low_x = ((col as f32 / cols as f32) * 2.0) - 1.0;
             let low_y = ((row as f32 / rows as f32) * 2.0) - 1.0;
+
+            let up_x = low_x + sq_width;
+            let up_y = low_y + sq_height;
+
+            /*
+            println!(
+                "low_x {} low_y {} high_x {} high_y {}",
+                low_x, low_y, up_x, up_y
+            );
+            */
 
             let verts: &[Vertex] = &[
                 // lower left triangle
@@ -31,25 +44,25 @@ fn make_grid(rows: usize, cols: usize) -> Vec<Vertex> {
                     color: [1.0, 0.0, 0.0],
                 },
                 Vertex {
-                    position: [low_x + sq_width, low_y, 0.0],
+                    position: [up_x, low_y, 0.0],
                     color: [0.0, 1.0, 0.0],
                 },
                 Vertex {
-                    position: [low_x, low_y + sq_height, 0.0],
+                    position: [low_x, up_y, 0.0],
                     color: [0.0, 0.0, 1.0],
                 },
                 // upper right triangle
                 Vertex {
-                    position: [low_x + sq_width, low_y + sq_height, 0.0],
-                    color: [1.0, 1.0, 0.0],
+                    position: [low_x, up_y, 0.0],
+                    color: [0.0, 1.0, 1.0],
                 },
                 Vertex {
-                    position: [low_x + sq_width, low_y, 0.0],
+                    position: [up_x, low_y, 0.0],
                     color: [0.0, 1.0, 0.0],
                 },
                 Vertex {
-                    position: [low_x, low_y + sq_height, 0.0],
-                    color: [0.0, 1.0, 1.0],
+                    position: [up_x, up_y, 0.0],
+                    color: [1.0, 1.0, 0.0],
                 },
             ];
 
@@ -82,7 +95,63 @@ impl State {
     fn render(&mut self) {
         self.gfx_ctx.start();
 
-        let verts = make_grid(5, 5);
+        let verts = make_grid(self, 5, 5);
+
+        /*
+        let verts: &[Vertex] = &[
+            // lower left triangle
+            Vertex {
+                position: [0.5, 0.5, 0.0],
+                color: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0, 0.5, 0.0],
+                color: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [0.5, 0.0, 0.0],
+                color: [0.0, 0.0, 1.0],
+            },
+            // upper right triangle
+            Vertex {
+                position: [0.0, 0.0, 0.0],
+                color: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0, 0.5, 0.0],
+                color: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [0.5, 0.0, 0.0],
+                color: [0.0, 0.0, 1.0],
+            },
+        ];
+
+        let verts: &[Vertex] = &[
+            // lower left triangle
+            Vertex {
+                position: [0.5, 0.5, 0.0],
+                color: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0, 0.5, 0.0],
+                color: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [0.5, 0.0, 0.0],
+                color: [0.0, 0.0, 1.0],
+            },
+            // upper right triangle
+            Vertex {
+                position: [0.0, 0.6, 0.0],
+                color: [1.0, 0.0, 0.0],
+            },
+        ];
+
+        let indices: &[u16] = &[1, 2, 3];
+
+        self.gfx_ctx.draw_indexed(&verts, indices);
+        */
 
         self.gfx_ctx.draw(&verts);
 
