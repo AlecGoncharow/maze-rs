@@ -37,9 +37,9 @@ impl ShaderData {
 }
 
 fn main() -> Result<()> {
-    println!("cargo:rerun-if-changed=src/*.vert");
-    println!("cargo:rerun-if-changed=src/*.comp");
-    println!("cargo:rerun-if-changed=src/*.frag");
+    println!("cargo:rerun-if-changed=src/shaders/*.vert");
+    println!("cargo:rerun-if-changed=src/shaders/*.comp");
+    println!("cargo:rerun-if-changed=src/shaders/*.frag");
 
     // Collect all shaders recursively within /src/
     let mut shader_paths = [
