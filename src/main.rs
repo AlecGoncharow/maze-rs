@@ -8,10 +8,56 @@ use winit::{
 #[allow(dead_code)]
 mod grid;
 mod renderer;
-use renderer::GraphicsContext;
+use renderer::{GraphicsContext, Vertex};
 
 pub struct State {
     gfx_ctx: GraphicsContext,
+}
+
+fn make_grid(rows: usize, cols: usize) -> Vec<Vertex> {
+    let mut grid = Vec::new();
+    let sq_width = 2.0 / cols as f32;
+    let sq_height = 2.0 / rows as f32;
+
+    for row in 0..rows {
+        for col in 0..cols {
+            let low_x = ((col as f32 / cols as f32) * 2.0) - 1.0;
+            let low_y = ((row as f32 / rows as f32) * 2.0) - 1.0;
+
+            let verts: &[Vertex] = &[
+                // lower left triangle
+                Vertex {
+                    position: [low_x, low_y, 0.0],
+                    color: [1.0, 0.0, 0.0],
+                },
+                Vertex {
+                    position: [low_x + sq_width, low_y, 0.0],
+                    color: [0.0, 1.0, 0.0],
+                },
+                Vertex {
+                    position: [low_x, low_y + sq_height, 0.0],
+                    color: [0.0, 0.0, 1.0],
+                },
+                // upper right triangle
+                Vertex {
+                    position: [low_x + sq_width, low_y + sq_height, 0.0],
+                    color: [1.0, 1.0, 0.0],
+                },
+                Vertex {
+                    position: [low_x + sq_width, low_y, 0.0],
+                    color: [0.0, 1.0, 0.0],
+                },
+                Vertex {
+                    position: [low_x, low_y + sq_height, 0.0],
+                    color: [0.0, 1.0, 1.0],
+                },
+            ];
+
+            grid.append(&mut Vec::from(verts));
+        }
+    }
+
+    grid
 }
 
 impl State {
@@ -34,6 +80,12 @@ impl State {
     fn update(&mut self) {}
 
     fn render(&mut self) {
+        self.gfx_ctx.start();
+
+        let verts = make_grid(5, 5);
+
+        self.gfx_ctx.draw(&verts);
+
         self.gfx_ctx.render();
     }
 }

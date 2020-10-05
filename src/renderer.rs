@@ -5,21 +5,21 @@ use wgpu::util::DeviceExt;
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
+    pub position: [f32; 3],
+    pub color: [f32; 3],
 }
 
 impl Vertex {
     fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a> {
         wgpu::VertexBufferDescriptor {
-            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress, // 1.
-            step_mode: wgpu::InputStepMode::Vertex,                       // 2.
+            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
                 // 3.
                 wgpu::VertexAttributeDescriptor {
-                    offset: 0,                          // 4.
-                    shader_location: 0,                 // 5.
-                    format: wgpu::VertexFormat::Float3, // 6.
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float3,
                 },
                 wgpu::VertexAttributeDescriptor {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
@@ -55,7 +55,10 @@ pub struct GraphicsContext {
     pub size: winit::dpi::PhysicalSize<u32>,
     pub clear_color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
-    pub vertex_buffer: wgpu::Buffer,
+
+    pub(crate) command_encoder: Option<wgpu::CommandEncoder>,
+    pub(crate) frame: Option<wgpu::SwapChainTexture>,
+    vertex_buffer: wgpu::Buffer,
 }
 
 impl GraphicsContext {
@@ -119,7 +122,7 @@ impl GraphicsContext {
             layout: Some(&render_pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
-                entry_point: "main", // 1.
+                entry_point: "main",
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 // 2.
@@ -142,22 +145,20 @@ impl GraphicsContext {
                 write_mask: wgpu::ColorWrite::ALL,
             }],
 
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-            depth_stencil_state: None,                                 // 2.
+            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+            depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
                 vertex_buffers: &[Vertex::desc()],
             },
-            sample_count: 1,                  // 5.
-            sample_mask: !0,                  // 6.
-            alpha_to_coverage_enabled: false, // 7.
+            sample_count: 1,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
         });
 
         let new_len = core::mem::size_of_val(VERTICES) / core::mem::size_of::<u8>();
         let vert_bytes =
             unsafe { core::slice::from_raw_parts(VERTICES.as_ptr() as *const u8, new_len) };
-
-        // new()
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: vert_bytes,
@@ -173,6 +174,8 @@ impl GraphicsContext {
             sc_desc,
             clear_color,
             render_pipeline,
+            frame: None,
+            command_encoder: None,
             vertex_buffer,
         }
     }
@@ -184,18 +187,24 @@ impl GraphicsContext {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
     }
 
-    pub fn render(&mut self) {
-        let frame = self
-            .swap_chain
-            .get_current_frame()
-            .expect("Timeout getting texture")
-            .output;
+    pub fn start(&mut self) {
+        self.frame = Some(
+            self.swap_chain
+                .get_current_frame()
+                .expect("Timeout getting texture")
+                .output,
+        );
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        self.command_encoder = Some(self.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
-            });
+            },
+        ));
+    }
+
+    pub fn draw(&mut self, verts: &[Vertex]) {
+        let mut encoder = self.command_encoder.take().unwrap();
+        let frame = self.frame.take().unwrap();
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -208,13 +217,34 @@ impl GraphicsContext {
             }],
             depth_stencil_attachment: None,
         });
-        render_pass.set_pipeline(&self.render_pipeline); // 2.
+        render_pass.set_pipeline(&self.render_pipeline);
+
+        let new_len = core::mem::size_of_val(verts) / core::mem::size_of::<u8>();
+        let vert_bytes =
+            unsafe { core::slice::from_raw_parts(verts.as_ptr() as *const u8, new_len) };
+
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: vert_bytes,
+                usage: wgpu::BufferUsage::VERTEX,
+            });
+
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.draw(0..VERTICES.len() as u32, 0..1); // 3.
-                                                          // drop mutable borrow of encoder
+        render_pass.draw(0..verts.len() as u32, 0..1);
         drop(render_pass);
 
+        self.frame = Some(frame);
+        self.command_encoder = Some(encoder);
+    }
+
+    pub fn render(&mut self) {
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(std::iter::once(
+            self.command_encoder.take().unwrap().finish(),
+        ));
+        self.command_encoder = None;
+        self.frame = None;
     }
 }
