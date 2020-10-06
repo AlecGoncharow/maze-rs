@@ -36,8 +36,8 @@ impl From<GridKind> for [f32; 4] {
             GridKind::Wall => [0.0, 0.0, 0.0, 1.0],
             GridKind::Start => [1.0, 0.0, 0.0, 1.0],
             GridKind::Goal => [1.0, 1.0, 0.0, 1.0],
-            GridKind::Path => [0.2, 0.2, 0.6, 1.0],
-            GridKind::Explored => [0.1, 0.1, 0.3, 1.0],
+            GridKind::Explored => [0.2, 0.2, 0.6, 1.0],
+            GridKind::Path => [0.1, 0.1, 0.3, 1.0],
             GridKind::Cursor => [0.0, 0.5, 0.3, 1.0],
         }
     }
@@ -52,6 +52,7 @@ pub struct Grid {
 
     pub start: Option<(usize, usize)>,
     pub goal: Option<(usize, usize)>,
+    pub cursor: Option<(usize, usize)>,
 
     pub graph: Option<Box<dyn Graph<u64, usize>>>,
     pub solver: Option<BFS>,
@@ -68,6 +69,7 @@ impl Grid {
             dims: Dimensions { rows, columns },
             start: None,
             goal: None,
+            cursor: None,
             graph: None,
             solver: None,
         }
@@ -293,9 +295,9 @@ impl Grid {
         self.solver = Some(BFS::new(graph, index));
     }
 
-    pub fn step_solve_path(&mut self) {
+    pub fn step_solve_path(&mut self) -> bool {
         if self.start.is_none() || self.goal.is_none() {
-            return;
+            return false;
         }
 
         let start = self.start.unwrap();
@@ -323,17 +325,41 @@ impl Grid {
         let solver = self.solver.as_mut().unwrap();
         let graph = &**self.graph.as_ref().unwrap();
 
-        let (row, col) = if let Some((idx, _from)) = solver.next(graph) {
-            let row = idx / self.dims.columns;
-            let col = idx % self.dims.columns;
+        let (row, col, kind) = if solver.solved {
+            let cursor = self.cursor.unwrap();
+            let idx = (cursor.0 * self.dims.columns) + cursor.1;
+            let from = solver.from_map[idx];
+            let row = from / self.dims.columns;
+            let col = from % self.dims.columns;
 
-            (row, col)
+            if row == start.0 && col == start.1 {
+                return false;
+            }
+
+            self.cursor = Some((row, col));
+
+            (row, col, GridKind::Path)
         } else {
-            return;
+            let (row, col, kind) = if let Some((idx, _from)) = solver.next(graph) {
+                let row = idx / self.dims.columns;
+                let col = idx % self.dims.columns;
+
+                if row == goal.0 && col == goal.1 {
+                    solver.solved = true;
+                    self.cursor = Some((row, col));
+                }
+
+                (row, col, GridKind::Cursor)
+            } else {
+                return false;
+            };
+
+            (row, col, kind)
         };
         drop(solver);
 
-        self.set_square(row, col, GridKind::Cursor);
+        self.set_square(row, col, kind);
+        true
     }
 
     pub fn solve_path(&mut self) {

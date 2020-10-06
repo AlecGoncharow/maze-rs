@@ -146,6 +146,7 @@ fn main() {
     let mut last_cursor = None;
     let mut show_demo = true;
     let mut grid_kind = GridKind::Wall;
+    let mut expanded_solve_running = false;
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -223,11 +224,20 @@ fn main() {
                             if ui.button(im_str!("Step Solver"), [100., 20.]) {
                                 state.grid.step_solve_path();
                             }
+                            ui.separator();
+                            if ui.button(im_str!("Expanded Solve"), [100., 20.]) {
+                                state.grid.graph = None;
+                                expanded_solve_running = !expanded_solve_running;
+                            }
                         });
 
                     if show_demo {
                         ui.show_demo_window(&mut false);
                     }
+                }
+
+                if expanded_solve_running {
+                    expanded_solve_running = state.grid.step_solve_path();
                 }
 
                 state.update();
