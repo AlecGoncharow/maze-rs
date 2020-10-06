@@ -8,8 +8,8 @@ unsafe impl bytemuck::Zeroable for Vertex {}
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3],
+    pub position: [f32; 2],
+    pub color: [f32; 4],
 }
 
 impl Vertex {
@@ -21,12 +21,12 @@ impl Vertex {
                 wgpu::VertexAttributeDescriptor {
                     offset: 0,
                     shader_location: 0,
-                    format: wgpu::VertexFormat::Float3,
+                    format: wgpu::VertexFormat::Float2,
                 },
                 wgpu::VertexAttributeDescriptor {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float3,
+                    format: wgpu::VertexFormat::Float4,
                 },
             ],
         }
@@ -35,16 +35,16 @@ impl Vertex {
 
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [0.0, 0.5, 0.0],
-        color: [1.0, 0.0, 0.0],
+        position: [0.0, 0.5],
+        color: [1.0, 0.0, 0.0, 1.0],
     },
     Vertex {
-        position: [-0.5, -0.5, 0.0],
-        color: [0.0, 1.0, 0.0],
+        position: [-0.5, -0.5],
+        color: [0.0, 1.0, 0.0, 1.0],
     },
     Vertex {
-        position: [0.5, -0.5, 0.0],
-        color: [0.0, 0.0, 1.0],
+        position: [0.5, -0.5],
+        color: [0.0, 0.0, 1.0, 1.0],
     },
 ];
 
