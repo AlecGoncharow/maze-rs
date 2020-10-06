@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bit-graph = { path = "../bit-graph" }
+bit-graph = { path = "../bit-graph-rs" }
 image = "0.23"
 winit = "0.22"
 cgmath = "0.17"

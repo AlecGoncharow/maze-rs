@@ -7,8 +7,11 @@ use winit::{
 
 #[allow(dead_code)]
 mod grid;
+#[allow(dead_code)]
 mod renderer;
 use renderer::{GraphicsContext, Vertex};
+
+const GRID_SCALE: f32 = 1.5;
 
 pub struct State {
     gfx_ctx: GraphicsContext,
@@ -18,10 +21,13 @@ fn make_grid(state: &State, rows: usize, cols: usize) -> Vec<Vertex> {
     let mut grid = Vec::new();
     let ratio = state.gfx_ctx.size.width as f32 / state.gfx_ctx.size.height as f32;
     let (sq_width, sq_height) = if ratio >= 1.0 {
-        (2.0 / cols as f32 / ratio, 2.0 / rows as f32)
+        (GRID_SCALE / cols as f32 / ratio, GRID_SCALE / rows as f32)
     } else {
-        (2.0 / cols as f32, 2.0 / rows as f32 * ratio)
+        (GRID_SCALE / cols as f32, GRID_SCALE / rows as f32 * ratio)
     };
+
+    //@TODO factor in GRID_SCALE somehow so that the grid has a margin from the border of the
+    //screen, make boxes touch?
     for row in 0..rows {
         for col in 0..cols {
             let low_x = ((col as f32 / cols as f32) * 2.0) - 1.0;
@@ -54,15 +60,15 @@ fn make_grid(state: &State, rows: usize, cols: usize) -> Vec<Vertex> {
                 // upper right triangle
                 Vertex {
                     position: [low_x, up_y, 0.0],
-                    color: [0.0, 1.0, 1.0],
+                    color: [0.0, 0.0, 1.0],
                 },
                 Vertex {
                     position: [up_x, low_y, 0.0],
-                    color: [0.0, 1.0, 0.0],
+                    color: [0.0, 0.0, 1.0],
                 },
                 Vertex {
                     position: [up_x, up_y, 0.0],
-                    color: [1.0, 1.0, 0.0],
+                    color: [0.0, 0.0, 1.0],
                 },
             ];
 
@@ -81,7 +87,7 @@ impl State {
                 self.gfx_ctx.clear_color = wgpu::Color {
                     r: position.x as f64 / self.gfx_ctx.size.width as f64,
                     g: position.y as f64 / self.gfx_ctx.size.height as f64,
-                    b: 1.0,
+                    b: 0.0,
                     a: 1.0,
                 };
                 true
