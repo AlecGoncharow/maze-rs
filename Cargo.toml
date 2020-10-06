@@ -8,13 +8,15 @@ edition = "2018"
 
 [dependencies]
 bit-graph = { path = "../bit-graph-rs" }
-image = "0.23"
 winit = "0.22"
-cgmath = "0.17"
 env_logger = "0.7"
 log = "0.4"
 futures = "0.3"
 bytemuck = "1.4"
+imgui = "0.5"
+imgui-wgpu = "0.10"
+imgui-winit-support = "0.5.0"
+
 
 [dependencies.wgpu]
 version = "0.6"

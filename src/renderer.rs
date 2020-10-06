@@ -50,59 +50,26 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 2];
 
+//@TODO take queue/device and others off this and pass in when needed to allow imgui to use
 pub struct GraphicsContext {
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    sc_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
     pub size: winit::dpi::PhysicalSize<u32>,
     pub clear_color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
 
     pub(crate) command_encoder: Option<wgpu::CommandEncoder>,
-    pub(crate) frame: Option<wgpu::SwapChainTexture>,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 }
 
 impl GraphicsContext {
     // Creating some of the wgpu types requires async code
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(
+        window: &Window,
+        device: &wgpu::Device,
+        sc_desc: &wgpu::SwapChainDescriptor,
+    ) -> Self {
         let size = window.inner_size();
 
-        // The instance is a handle to our GPU
-        // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
-        let surface = unsafe { instance.create_surface(window) };
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                compatible_surface: Some(&surface),
-            })
-            .await
-            .unwrap();
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
-                    shader_validation: true,
-                },
-                None, // Trace path
-            )
-            .await
-            .unwrap();
-
-        let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-        };
-        let swap_chain = device.create_swap_chain(&surface, &sc_desc);
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
@@ -175,14 +142,8 @@ impl GraphicsContext {
 
         Self {
             size,
-            device,
-            queue,
-            swap_chain,
-            surface,
-            sc_desc,
             clear_color,
             render_pipeline,
-            frame: None,
             command_encoder: None,
             vertex_buffer,
             index_buffer,
@@ -191,33 +152,15 @@ impl GraphicsContext {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
-        self.sc_desc.width = new_size.width;
-        self.sc_desc.height = new_size.height;
-        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
     }
 
-    pub fn start(&mut self) {
-        self.frame = Some(
-            self.swap_chain
-                .get_current_frame()
-                .expect("Timeout getting texture")
-                .output,
-        );
-
-        self.command_encoder = Some(self.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            },
-        ));
-    }
-
-    pub fn draw(&mut self, verts: &[Vertex]) {
-        let mut encoder = self.command_encoder.take().unwrap();
-        let frame = self.frame.take().unwrap();
-
+    pub fn start(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+        // clear frame
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
+                attachment: view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(self.clear_color),
@@ -226,34 +169,62 @@ impl GraphicsContext {
             }],
             depth_stencil_attachment: None,
         });
+
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.draw(0..0, 0..0);
+        drop(render_pass);
+
+        queue.submit(std::iter::once(encoder.finish()));
+
+        self.command_encoder =
+            Some(device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }));
+    }
+
+    pub fn draw(&mut self, verts: &[Vertex], view: &wgpu::TextureView, device: &wgpu::Device) {
+        let mut encoder = self.command_encoder.take().unwrap();
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: None,
+        });
         render_pass.set_pipeline(&self.render_pipeline);
 
-        self.vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&verts),
-                usage: wgpu::BufferUsage::VERTEX,
-            });
+        self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&verts),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..verts.len() as u32, 0..1);
         drop(render_pass);
 
-        self.frame = Some(frame);
         self.command_encoder = Some(encoder);
     }
 
-    pub fn draw_indexed(&mut self, verts: &[Vertex], indices: &[u16]) {
+    pub fn draw_indexed(
+        &mut self,
+        verts: &[Vertex],
+        view: &wgpu::TextureView,
+        indices: &[u16],
+        device: &wgpu::Device,
+    ) {
         let mut encoder = self.command_encoder.take().unwrap();
-        let frame = self.frame.take().unwrap();
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
+                attachment: view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(self.clear_color),
+                    load: wgpu::LoadOp::Load,
                     store: true,
                 },
             }],
@@ -261,37 +232,31 @@ impl GraphicsContext {
         });
         render_pass.set_pipeline(&self.render_pipeline);
 
-        self.vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&verts),
-                usage: wgpu::BufferUsage::VERTEX,
-            });
+        self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&verts),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
 
-        self.index_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(indices),
-                usage: wgpu::BufferUsage::INDEX,
-            });
+        self.index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(indices),
+            usage: wgpu::BufferUsage::INDEX,
+        });
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..));
         render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
         drop(render_pass);
 
-        self.frame = Some(frame);
         self.command_encoder = Some(encoder);
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, queue: &wgpu::Queue) {
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(
+        queue.submit(std::iter::once(
             self.command_encoder.take().unwrap().finish(),
         ));
         self.command_encoder = None;
-        self.frame = None;
     }
 }
