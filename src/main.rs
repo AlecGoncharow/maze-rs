@@ -9,7 +9,7 @@ use imgui::im_str;
 
 #[allow(dead_code)]
 mod grid;
-use grid::{Grid, GridKind};
+use grid::{Grid, GridKind, SolverKind};
 
 #[allow(dead_code)]
 mod renderer;
@@ -144,7 +144,7 @@ fn main() {
 
     let mut last_frame = std::time::Instant::now();
     let mut last_cursor = None;
-    let mut show_demo = true;
+    let mut show_demo = false;
     let mut grid_kind = GridKind::Wall;
     let mut expanded_solve_running = false;
 
@@ -217,6 +217,24 @@ fn main() {
                             }
 
                             ui.separator();
+
+                            if ui.radio_button(
+                                im_str!("BFS"),
+                                &mut state.grid.solver_kind,
+                                SolverKind::BFS,
+                            ) {
+                                state.grid.solver_kind = SolverKind::BFS;
+                            }
+                            if ui.radio_button(
+                                im_str!("DFS"),
+                                &mut state.grid.solver_kind,
+                                SolverKind::DFS,
+                            ) {
+                                state.grid.solver_kind = SolverKind::DFS;
+                            }
+
+                            ui.separator();
+
                             if ui.button(im_str!("Solve!"), [100., 20.]) {
                                 state.grid.solve_path();
                             }

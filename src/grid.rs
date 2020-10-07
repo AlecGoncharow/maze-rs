@@ -13,9 +13,12 @@ pub struct Dimensions {
     columns: usize,
 }
 
-use bit_graph::hash::HashGraph;
+//use bit_graph::hash::HashGraph;
+//use bit_graph::baseline::AdjGraph;
 use bit_graph::search::bfs::BFS;
-//use bit_graph::BitGraph;
+use bit_graph::search::dfs::DFS;
+use bit_graph::search::Pathfinder;
+use bit_graph::BitGraph;
 use bit_graph::Graph;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -37,10 +40,16 @@ impl From<GridKind> for [f32; 4] {
             GridKind::Start => [1.0, 0.0, 0.0, 1.0],
             GridKind::Goal => [1.0, 1.0, 0.0, 1.0],
             GridKind::Explored => [0.2, 0.2, 0.6, 1.0],
-            GridKind::Path => [0.1, 0.1, 0.3, 1.0],
+            GridKind::Path => [0.1, 0.5, 0.1, 1.0],
             GridKind::Cursor => [0.0, 0.5, 0.3, 1.0],
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum SolverKind {
+    DFS,
+    BFS,
 }
 
 pub struct Grid {
@@ -54,8 +63,9 @@ pub struct Grid {
     pub goal: Option<(usize, usize)>,
     pub cursor: Option<(usize, usize)>,
 
-    pub graph: Option<Box<dyn Graph<u64, usize>>>,
-    pub solver: Option<BFS>,
+    pub graph: Option<Box<dyn Graph<u64, bool>>>,
+    pub solver: Option<Box<dyn Pathfinder<u64, bool>>>,
+    pub solver_kind: SolverKind,
 }
 
 impl Grid {
@@ -72,6 +82,7 @@ impl Grid {
             cursor: None,
             graph: None,
             solver: None,
+            solver_kind: SolverKind::BFS,
         }
     }
 
@@ -252,7 +263,7 @@ impl Grid {
     }
 
     pub fn make_graph(&mut self) {
-        let mut graph = HashGraph::with_capacity(self.dims.rows * self.dims.columns);
+        let mut graph = BitGraph::with_capacity(self.dims.rows * self.dims.columns);
 
         for _ in &self.squares {
             graph.push_node(1);
@@ -292,7 +303,10 @@ impl Grid {
         let graph = &**self.graph.as_ref().unwrap();
         let root = self.start.unwrap();
         let index = (self.dims.columns * root.0) + root.1;
-        self.solver = Some(BFS::new(graph, index));
+        self.solver = Some(match self.solver_kind {
+            SolverKind::BFS => Box::new(BFS::new(graph, index)),
+            SolverKind::DFS => Box::new(DFS::new(graph, index)),
+        });
     }
 
     pub fn step_solve_path(&mut self) -> bool {
@@ -325,10 +339,10 @@ impl Grid {
         let solver = self.solver.as_mut().unwrap();
         let graph = &**self.graph.as_ref().unwrap();
 
-        let (row, col, kind) = if solver.solved {
+        let (row, col, kind) = if solver.is_solved() {
             let cursor = self.cursor.unwrap();
             let idx = (cursor.0 * self.dims.columns) + cursor.1;
-            let from = solver.from_map[idx];
+            let from = solver.from_index_of(idx);
             let row = from / self.dims.columns;
             let col = from % self.dims.columns;
 
@@ -345,7 +359,7 @@ impl Grid {
                 let col = idx % self.dims.columns;
 
                 if row == goal.0 && col == goal.1 {
-                    solver.solved = true;
+                    solver.set_solved();
                     self.cursor = Some((row, col));
                 }
 
@@ -375,9 +389,9 @@ impl Grid {
         let goal_idx = (goal.0 * self.dims.columns) + goal.1;
         println!("start: {}, goal: {}", root_idx, goal_idx);
         let graph = &**self.graph.as_ref().unwrap();
-        let mut bfs = BFS::new(graph, root_idx);
+        let mut solver = self.solver.take().unwrap();
 
-        if let Some(path) = bfs.path_to(goal_idx, graph) {
+        if let Some(path) = solver.path_to(graph, goal_idx) {
             // pop off root
             println!("Path found: {:?}", path);
 
@@ -385,13 +399,14 @@ impl Grid {
                 let row = path[i] / self.dims.columns;
                 let col = path[i] % self.dims.columns;
 
-                println!("path node: r: {} c: {}", row, col);
-
                 self.set_square(row, col, GridKind::Path);
             }
         } else {
             println!("path not found");
         }
+
+        // clear graph for reasons
+        self.graph = None;
     }
 }
 
@@ -415,10 +430,10 @@ mod test_grid {
         assert!(grid.unset_square(0, 0) == GridKind::Wall);
         assert!(!grid.is_set(0, 0));
 
-        assert!(!(grid.toggle_square(14, 1) == GridKind::Wall));
+        assert!(!(grid.toggle_square(14, 1, GridKind::Wall) == GridKind::Wall));
         assert!(grid.is_set(14, 1));
 
-        assert!(!(grid.toggle_square(100, 300) == GridKind::Wall));
+        assert!(!(grid.toggle_square(100, 300, GridKind::Wall) == GridKind::Wall));
         assert!(grid.is_set(100, 300));
     }
 }
