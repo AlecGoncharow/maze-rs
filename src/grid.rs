@@ -9,8 +9,8 @@ use crate::renderer::Vertex;
 use crate::State;
 
 pub struct Dimensions {
-    rows: usize,
-    columns: usize,
+    pub rows: usize,
+    pub columns: usize,
 }
 
 //use bit_graph::hash::HashGraph;
@@ -55,7 +55,7 @@ pub enum SolverKind {
 }
 
 pub struct Grid {
-    dims: Dimensions,
+    pub dims: Dimensions,
 
     /// uses each bit of vector to represent a square in the grid as being toggled or not
     /// this will require a refactor later but c'est la vie

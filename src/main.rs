@@ -15,6 +15,10 @@ use grid::{Grid, GridKind, SolverKind};
 mod renderer;
 use renderer::GraphicsContext;
 
+#[allow(dead_code)]
+mod generators;
+use generators::division::RecursiveDivider;
+
 pub struct State {
     pub gfx_ctx: GraphicsContext,
     pub grid: Grid,
@@ -265,6 +269,16 @@ fn main() {
                             ui.same_line(150.);
                             if ui.button(im_str!("Fill Grid"), [125., 20.]) {
                                 state.grid.fill();
+                            }
+                            ui.separator();
+                            if ui.button(im_str!("Generate Maze"), [250., 20.]) {
+                                let mut gen = RecursiveDivider::new(
+                                    state.grid.dims.rows,
+                                    state.grid.dims.columns,
+                                );
+
+                                let squares = gen.generate_maze();
+                                state.grid.squares = squares;
                             }
                         });
 
