@@ -188,7 +188,7 @@ fn main() {
                 {
                     let window = imgui::Window::new(im_str!("Hello world"));
                     window
-                        .size([500.0, 200.0], imgui::Condition::FirstUseEver)
+                        .size([300.0, 200.0], imgui::Condition::FirstUseEver)
                         .build(&ui, || {
                             ui.text(im_str!("Frametime: {:?}", delta_s));
                             ui.separator();
@@ -209,9 +209,11 @@ fn main() {
                             if ui.radio_button(im_str!("Wall"), &mut grid_kind, GridKind::Wall) {
                                 grid_kind = GridKind::Wall;
                             }
+                            ui.same_line(100.);
                             if ui.radio_button(im_str!("Start"), &mut grid_kind, GridKind::Start) {
                                 grid_kind = GridKind::Start;
                             }
+                            ui.same_line(200.);
                             if ui.radio_button(im_str!("Goal"), &mut grid_kind, GridKind::Goal) {
                                 grid_kind = GridKind::Goal;
                             }
@@ -225,6 +227,7 @@ fn main() {
                             ) {
                                 state.grid.solver_kind = SolverKind::BFS;
                             }
+                            ui.same_line(100.);
                             if ui.radio_button(
                                 im_str!("DFS"),
                                 &mut state.grid.solver_kind,
@@ -232,6 +235,7 @@ fn main() {
                             ) {
                                 state.grid.solver_kind = SolverKind::DFS;
                             }
+                            ui.same_line(200.);
                             if ui.radio_button(
                                 im_str!("A Star"),
                                 &mut state.grid.solver_kind,
@@ -242,17 +246,25 @@ fn main() {
 
                             ui.separator();
 
-                            if ui.button(im_str!("Solve!"), [100., 20.]) {
+                            if ui.button(im_str!("Solve!"), [125., 20.]) {
                                 state.grid.solve_path();
                             }
                             ui.separator();
-                            if ui.button(im_str!("Step Solver"), [100., 20.]) {
+                            if ui.button(im_str!("Expanded Solve"), [125., 20.]) {
+                                state.grid.graph = None;
+                                expanded_solve_running = !expanded_solve_running;
+                            }
+                            ui.same_line(150.);
+                            if ui.button(im_str!("Step Solver"), [125., 20.]) {
                                 state.grid.step_solve_path();
                             }
                             ui.separator();
-                            if ui.button(im_str!("Expanded Solve"), [100., 20.]) {
-                                state.grid.graph = None;
-                                expanded_solve_running = !expanded_solve_running;
+                            if ui.button(im_str!("Clear Grid"), [125., 20.]) {
+                                state.grid.clear();
+                            }
+                            ui.same_line(150.);
+                            if ui.button(im_str!("Fill Grid"), [125., 20.]) {
+                                state.grid.fill();
                             }
                         });
 

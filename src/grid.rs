@@ -117,6 +117,20 @@ impl Grid {
         self.set_square(row, column, GridKind::Empty)
     }
 
+    pub fn clear(&mut self) {
+        self.squares = vec![GridKind::Empty; self.squares.len()];
+        self.start = None;
+        self.goal = None;
+        self.cursor = None;
+    }
+
+    pub fn fill(&mut self) {
+        self.squares = vec![GridKind::Wall; self.squares.len()];
+        self.start = None;
+        self.goal = None;
+        self.cursor = None;
+    }
+
     pub fn toggle_square(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
