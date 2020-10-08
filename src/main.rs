@@ -232,6 +232,13 @@ fn main() {
                             ) {
                                 state.grid.solver_kind = SolverKind::DFS;
                             }
+                            if ui.radio_button(
+                                im_str!("A Star"),
+                                &mut state.grid.solver_kind,
+                                SolverKind::AStar,
+                            ) {
+                                state.grid.solver_kind = SolverKind::AStar;
+                            }
 
                             ui.separator();
 

@@ -15,6 +15,7 @@ pub struct Dimensions {
 
 //use bit_graph::hash::HashGraph;
 //use bit_graph::baseline::AdjGraph;
+use bit_graph::search::a_star::AStarMH;
 use bit_graph::search::bfs::BFS;
 use bit_graph::search::dfs::DFS;
 use bit_graph::search::Pathfinder;
@@ -50,6 +51,7 @@ impl From<GridKind> for [f32; 4] {
 pub enum SolverKind {
     DFS,
     BFS,
+    AStar,
 }
 
 pub struct Grid {
@@ -303,9 +305,21 @@ impl Grid {
         let graph = &**self.graph.as_ref().unwrap();
         let root = self.start.unwrap();
         let index = (self.dims.columns * root.0) + root.1;
+        let goal = match self.goal {
+            Some(inner) => inner,
+            None => {
+                if self.solver_kind == SolverKind::AStar {
+                    panic!("Astar requires a goal")
+                } else {
+                    (0, 0)
+                }
+            }
+        };
+        let goal_idx = (self.dims.columns * goal.0) + goal.1;
         self.solver = Some(match self.solver_kind {
             SolverKind::BFS => Box::new(BFS::new(graph, index)),
             SolverKind::DFS => Box::new(DFS::new(graph, index)),
+            SolverKind::AStar => Box::new(AStarMH::new(graph, index, goal_idx, self.dims.columns)),
         });
     }
 
