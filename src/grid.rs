@@ -2,9 +2,10 @@ const WORD_BYTES: usize = std::mem::size_of::<usize>();
 const WORD_BITS: usize = WORD_BYTES * 8;
 const DEFAULT_DIMS: (usize, usize) = (16, 16);
 
-pub const GRID_SCALE: f32 = 1.5;
-pub const SQUARE_GAP: f32 = 0.01;
+pub const GRID_SCALE: f32 = 1.3;
+pub const SQUARE_GAP: f32 = 0.005;
 
+use crate::generators::{Direction, Neighborhood};
 use crate::renderer::Vertex;
 use crate::State;
 
@@ -22,7 +23,7 @@ use bit_graph::search::Pathfinder;
 use bit_graph::BitGraph;
 use bit_graph::Graph;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum GridKind {
     Empty,
     Wall,
@@ -102,6 +103,62 @@ impl Grid {
         let word_col = column;
 
         self.squares[word_row + word_col]
+    }
+
+    // returns coords of neighbor
+    pub fn set_neighbor_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: Direction,
+        kind: GridKind,
+    ) -> (usize, usize) {
+        let row = coords.0;
+        let column = coords.1;
+
+        let (n_row, n_col) = match direction {
+            Direction::North => (row + 1, column),
+            Direction::South => (row - 1, column),
+            Direction::East => (row, column + 1),
+            Direction::West => (row, column - 1),
+            Direction::Sentinel => panic!("no"),
+        };
+
+        self.set_square(n_row, n_col, kind);
+
+        (n_row, n_col)
+    }
+
+    pub fn get_neighborhood_of(&self, row: usize, column: usize) -> Neighborhood {
+        let mut neighbors = Neighborhood::new();
+        let word_row = self.dims.columns * row;
+        let word_col = column;
+        let index = word_row + word_col;
+
+        neighbors.north = if let Some(kind) = self.squares.get(index + self.dims.columns) {
+            Some((*kind, (row + 1, column)))
+        } else {
+            None
+        };
+
+        neighbors.south = if index >= self.dims.columns {
+            Some((self.squares[index - self.dims.columns], (row - 1, column)))
+        } else {
+            None
+        };
+
+        neighbors.east = if column < self.dims.columns - 1 {
+            Some((self.squares[index + 1], (row, column + 1)))
+        } else {
+            None
+        };
+
+        neighbors.west = if column > 0 {
+            Some((self.squares[index - 1], (row, column - 1)))
+        } else {
+            None
+        };
+
+        neighbors
     }
 
     pub fn set_square(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {

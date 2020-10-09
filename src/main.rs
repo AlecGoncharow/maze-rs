@@ -18,6 +18,7 @@ use renderer::GraphicsContext;
 #[allow(dead_code)]
 mod generators;
 use generators::division::RecursiveDivider;
+use generators::prim::RandPrims;
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
@@ -74,7 +75,7 @@ fn main() {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let hidpi_factor = window.scale_factor();
     // Since main can't be async, we're going to need to block
-    let grid = Grid::new();
+    let grid = Grid::with_dims(103, 103);
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -151,6 +152,8 @@ fn main() {
     let mut show_demo = false;
     let mut grid_kind = GridKind::Wall;
     let mut expanded_solve_running = false;
+    let mut expanded_gen_running = false;
+    let mut maze_generator = RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -272,12 +275,19 @@ fn main() {
                             }
                             ui.separator();
                             if ui.button(im_str!("Generate Maze"), [250., 20.]) {
-                                let mut gen = RecursiveDivider::new(
-                                    state.grid.dims.rows,
-                                    state.grid.dims.columns,
-                                );
-
-                                let squares = gen.generate_maze();
+                                maze_generator =
+                                    RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
+                                let squares = maze_generator.generate_maze();
+                                state.grid.squares = squares;
+                            }
+                            ui.separator();
+                            if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
+                                maze_generator =
+                                    RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
+                                expanded_gen_running = !expanded_gen_running;
+                            }
+                            if ui.button(im_str!("Step Maze"), [125., 20.]) {
+                                let squares = maze_generator.next_step();
                                 state.grid.squares = squares;
                             }
                         });
@@ -289,6 +299,11 @@ fn main() {
 
                 if expanded_solve_running {
                     expanded_solve_running = state.grid.step_solve_path();
+                }
+
+                if expanded_gen_running {
+                    state.grid.squares = maze_generator.next_step();
+                    expanded_gen_running = !maze_generator.done;
                 }
 
                 state.update();
