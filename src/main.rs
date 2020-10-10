@@ -17,7 +17,6 @@ use renderer::GraphicsContext;
 
 #[allow(dead_code)]
 mod generators;
-use generators::division::RecursiveDivider;
 use generators::prim::RandPrims;
 
 pub struct State {
@@ -26,6 +25,9 @@ pub struct State {
 
     pub last_x: f32,
     pub last_y: f32,
+
+    pub rows: u16,
+    pub cols: u16,
 }
 
 impl State {
@@ -56,7 +58,16 @@ impl State {
         }
     }
 
-    fn update(&mut self) {}
+    fn update(&mut self) {
+        self.rows += if self.rows % 2 == 0 { 1 } else { 0 };
+        self.cols += if self.cols % 2 == 0 { 1 } else { 0 };
+
+        let rows = self.rows as usize;
+        let cols = self.cols as usize;
+        if rows != self.grid.dims.rows || cols != self.grid.dims.columns {
+            self.grid = Grid::with_dims(rows, cols);
+        }
+    }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.gfx_ctx.start(view, device, queue);
@@ -142,6 +153,8 @@ fn main() {
 
     let mut state = State {
         gfx_ctx,
+        rows: grid.dims.rows as u16,
+        cols: grid.dims.columns as u16,
         grid,
         last_x: 0.0,
         last_y: 0.0,
@@ -193,9 +206,9 @@ fn main() {
                 let ui = imgui.frame();
 
                 {
-                    let window = imgui::Window::new(im_str!("Hello world"));
+                    let window = imgui::Window::new(im_str!("Maze Controls"));
                     window
-                        .size([300.0, 200.0], imgui::Condition::FirstUseEver)
+                        .size([300.0, 300.0], imgui::Condition::FirstUseEver)
                         .build(&ui, || {
                             ui.text(im_str!("Frametime: {:?}", delta_s));
                             ui.separator();
@@ -210,6 +223,15 @@ fn main() {
                             if ui.button(im_str!("Toggle Demo"), [100., 20.]) {
                                 show_demo = !show_demo
                             }
+                            ui.separator();
+
+                            imgui::Slider::new(im_str!("rows"))
+                                .range(3..=255)
+                                .build(&ui, &mut state.rows);
+
+                            imgui::Slider::new(im_str!("columns"))
+                                .range(3..=255)
+                                .build(&ui, &mut state.cols);
 
                             ui.separator();
 
@@ -253,7 +275,7 @@ fn main() {
 
                             ui.separator();
 
-                            if ui.button(im_str!("Solve!"), [125., 20.]) {
+                            if ui.button(im_str!("Solve!"), [250., 20.]) {
                                 state.grid.solve_path();
                             }
                             ui.separator();
@@ -286,6 +308,7 @@ fn main() {
                                     RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
                                 expanded_gen_running = !expanded_gen_running;
                             }
+                            ui.same_line(150.);
                             if ui.button(im_str!("Step Maze"), [125., 20.]) {
                                 let squares = maze_generator.next_step();
                                 state.grid.squares = squares;
@@ -346,7 +369,7 @@ fn main() {
                 ref event,
                 window_id,
             } if window_id == window.id() => {
-                if !state.input(event, grid_kind) {
+                if !imgui.io().want_capture_mouse && !state.input(event, grid_kind) {
                     // UPDATED!
                     match event {
                         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
