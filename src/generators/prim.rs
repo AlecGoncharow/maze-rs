@@ -1,4 +1,5 @@
 use crate::grid::{Grid, GridKind};
+use crate::generators::Generator;
 use rand::prelude::*;
 
 pub struct RandPrims {
@@ -13,18 +14,24 @@ impl RandPrims {
     pub fn new(rows: usize, cols: usize) -> Self {
         let mut grid = Grid::with_dims(rows, cols);
         grid.fill();
-        let walls = vec![(1, 1)];
-        let last_passage = (1, 1);
+        let mut rng = rand::thread_rng();
+        // make it odd
+        let row = (rng.gen::<f32>() * (rows - 1) as f32) as usize | 1;
+        let col = (rng.gen::<f32>() * (cols - 1) as f32) as usize | 1;
+        let walls = vec![(row, col)];
+        let last_passage = (row, col);
         Self {
             grid,
             walls,
-            rng: rand::thread_rng(),
             last_passage,
+            rng,
             done: false,
         }
     }
+}
 
-    pub fn step_generation(&mut self) {
+impl Generator for RandPrims {
+    fn step_generation(&mut self) {
         // loop until wall is found
         loop {
             if self.walls.len() == 0 {
@@ -71,12 +78,12 @@ impl RandPrims {
         }
     }
 
-    pub fn next_step(&mut self) -> Vec<GridKind> {
+    fn next_step(&mut self) -> Vec<GridKind> {
         self.step_generation();
         self.grid.squares.clone()
     }
 
-    pub fn generate_maze(&mut self) -> Vec<GridKind> {
+    fn generate_maze(&mut self) -> Vec<GridKind> {
         loop {
             self.step_generation();
             if self.done {
@@ -86,5 +93,9 @@ impl RandPrims {
         self.grid.set_square(self.last_passage.0, self.last_passage.1, GridKind::Empty);
 
         self.grid.squares.clone()
+    }
+
+    fn is_done(&self) -> bool {
+        self.done
     }
 }

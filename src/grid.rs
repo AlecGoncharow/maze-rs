@@ -112,6 +112,19 @@ impl Grid {
         direction: Direction,
         kind: GridKind,
     ) -> (usize, usize) {
+        let (n_row, n_col) = self.get_neighbor_coords_of(coords, direction);
+
+        self.set_square(n_row, n_col, kind);
+
+        (n_row, n_col)
+    }
+
+    // returns coords of neighbor
+    pub fn get_neighbor_coords_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: Direction,
+    ) -> (usize, usize) {
         let row = coords.0;
         let column = coords.1;
 
@@ -122,8 +135,6 @@ impl Grid {
             Direction::West => (row, column - 1),
             Direction::Sentinel => panic!("no"),
         };
-
-        self.set_square(n_row, n_col, kind);
 
         (n_row, n_col)
     }

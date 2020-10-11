@@ -17,11 +17,15 @@ use renderer::GraphicsContext;
 
 #[allow(dead_code)]
 mod generators;
+use generators::aldous_broder::AldousBroder;
 use generators::prim::RandPrims;
+use generators::{Generator, GeneratorKind};
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
     pub grid: Grid,
+    pub generator_kind: GeneratorKind,
+    pub maze_generator: Box<dyn Generator>,
 
     pub last_x: f32,
     pub last_y: f32,
@@ -59,13 +63,15 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.rows += if self.rows % 2 == 0 { 1 } else { 0 };
-        self.cols += if self.cols % 2 == 0 { 1 } else { 0 };
+        // snap dimensions to odd values, for reasons
+        self.rows |= 1;
+        self.cols |= 1;
 
         let rows = self.rows as usize;
         let cols = self.cols as usize;
         if rows != self.grid.dims.rows || cols != self.grid.dims.columns {
             self.grid = Grid::with_dims(rows, cols);
+            self.maze_generator = new_generator(self.generator_kind, self);
         }
     }
 
@@ -77,6 +83,20 @@ impl State {
         self.gfx_ctx.draw(&verts, view, device);
 
         self.gfx_ctx.render(queue);
+    }
+}
+
+fn new_generator(generator_kind: GeneratorKind, state: &State) -> Box<dyn Generator> {
+    match generator_kind {
+        GeneratorKind::AldousBroder => Box::new(AldousBroder::new(
+            state.grid.dims.rows,
+            state.grid.dims.columns,
+        )),
+
+        GeneratorKind::RandPrims => Box::new(RandPrims::new(
+            state.grid.dims.rows,
+            state.grid.dims.columns,
+        )),
     }
 }
 
@@ -151,10 +171,15 @@ fn main() {
     let mut renderer =
         imgui_wgpu::Renderer::new_glsl(&mut imgui, &device, &mut queue, sc_desc.format);
 
+    let generator_kind = GeneratorKind::RandPrims;
+    let maze_generator = Box::new(RandPrims::new(grid.dims.rows, grid.dims.columns));
+
     let mut state = State {
         gfx_ctx,
         rows: grid.dims.rows as u16,
         cols: grid.dims.columns as u16,
+        generator_kind,
+        maze_generator,
         grid,
         last_x: 0.0,
         last_y: 0.0,
@@ -166,7 +191,6 @@ fn main() {
     let mut grid_kind = GridKind::Wall;
     let mut expanded_solve_running = false;
     let mut expanded_gen_running = false;
-    let mut maze_generator = RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -246,6 +270,53 @@ fn main() {
                             if ui.radio_button(im_str!("Goal"), &mut grid_kind, GridKind::Goal) {
                                 grid_kind = GridKind::Goal;
                             }
+                            ui.separator();
+                            if ui.button(im_str!("Clear Grid"), [125., 20.]) {
+                                state.grid.clear();
+                            }
+                            ui.same_line(150.);
+                            if ui.button(im_str!("Fill Grid"), [125., 20.]) {
+                                state.grid.fill();
+                            }
+
+                            ui.separator();
+
+                            if ui.radio_button(
+                                im_str!("Rand Prims"),
+                                &mut state.generator_kind,
+                                GeneratorKind::RandPrims,
+                            ) {
+                                state.generator_kind = GeneratorKind::RandPrims;
+                                state.maze_generator = new_generator(state.generator_kind, &state);
+                            }
+                            ui.same_line(100.);
+                            if ui.radio_button(
+                                im_str!("AldousBroder"),
+                                &mut state.generator_kind,
+                                GeneratorKind::AldousBroder,
+                            ) {
+                                state.generator_kind = GeneratorKind::AldousBroder;
+                                state.maze_generator = new_generator(state.generator_kind, &state);
+                            }
+                            ui.separator();
+                            if ui.button(im_str!("Generate Maze"), [250., 20.]) {
+                                state.maze_generator = new_generator(state.generator_kind, &state);
+                                let squares = state.maze_generator.generate_maze();
+                                state.grid.squares = squares;
+                            }
+                            ui.separator();
+                            if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
+                                if state.maze_generator.is_done() {
+                                    state.maze_generator =
+                                        new_generator(state.generator_kind, &state);
+                                }
+                                expanded_gen_running = !expanded_gen_running;
+                            }
+                            ui.same_line(150.);
+                            if ui.button(im_str!("Step Maze"), [125., 20.]) {
+                                let squares = state.maze_generator.next_step();
+                                state.grid.squares = squares;
+                            }
 
                             ui.separator();
 
@@ -287,32 +358,6 @@ fn main() {
                             if ui.button(im_str!("Step Solver"), [125., 20.]) {
                                 state.grid.step_solve_path();
                             }
-                            ui.separator();
-                            if ui.button(im_str!("Clear Grid"), [125., 20.]) {
-                                state.grid.clear();
-                            }
-                            ui.same_line(150.);
-                            if ui.button(im_str!("Fill Grid"), [125., 20.]) {
-                                state.grid.fill();
-                            }
-                            ui.separator();
-                            if ui.button(im_str!("Generate Maze"), [250., 20.]) {
-                                maze_generator =
-                                    RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
-                                let squares = maze_generator.generate_maze();
-                                state.grid.squares = squares;
-                            }
-                            ui.separator();
-                            if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
-                                maze_generator =
-                                    RandPrims::new(state.grid.dims.rows, state.grid.dims.columns);
-                                expanded_gen_running = !expanded_gen_running;
-                            }
-                            ui.same_line(150.);
-                            if ui.button(im_str!("Step Maze"), [125., 20.]) {
-                                let squares = maze_generator.next_step();
-                                state.grid.squares = squares;
-                            }
                         });
 
                     if show_demo {
@@ -325,8 +370,8 @@ fn main() {
                 }
 
                 if expanded_gen_running {
-                    state.grid.squares = maze_generator.next_step();
-                    expanded_gen_running = !maze_generator.done;
+                    state.grid.squares = state.maze_generator.next_step();
+                    expanded_gen_running = !state.maze_generator.is_done();
                 }
 
                 state.update();
