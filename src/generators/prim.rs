@@ -1,9 +1,9 @@
-use crate::grid::{Grid, GridKind};
+use crate::grids::block_grid::{BlockGrid, GridKind};
 use crate::generators::Generator;
 use rand::prelude::*;
 
 pub struct RandPrims {
-    grid: Grid,
+    grid: BlockGrid,
     walls: Vec<(usize, usize)>,
     rng: ThreadRng,
     last_passage: (usize, usize),
@@ -12,7 +12,7 @@ pub struct RandPrims {
 
 impl RandPrims {
     pub fn new(rows: usize, cols: usize) -> Self {
-        let mut grid = Grid::with_dims(rows, cols);
+        let mut grid = BlockGrid::with_dims(rows, cols);
         grid.fill();
         let mut rng = rand::thread_rng();
         // make it odd

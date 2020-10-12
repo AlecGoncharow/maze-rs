@@ -1,9 +1,10 @@
-use crate::grid::{Grid, GridKind};
+use crate::grids::block_grid::{BlockGrid, GridKind};
 use crate::generators::Generator;
 use rand::prelude::*;
+use crate::grids::Direction;
 
 pub struct AldousBroder {
-    grid: Grid,
+    grid: BlockGrid,
     visited: Vec<bool>,
     rng: ThreadRng,
     current_cell: (usize, usize),
@@ -13,7 +14,7 @@ pub struct AldousBroder {
 
 impl AldousBroder {
     pub fn new(rows: usize, cols: usize) -> Self {
-        let mut grid = Grid::with_dims(rows, cols);
+        let mut grid = BlockGrid::with_dims(rows, cols);
         grid.fill();
         let visited = (0..rows * cols).map(|index| {
             if index % cols == 0 
@@ -56,28 +57,28 @@ impl Generator for AldousBroder {
                 let choose = (self.rng.gen::<f32>() * 4.0) as usize;
 
                 let neighbor = loop {
-                    match crate::generators::Direction::from(choose) {
-                        super::Direction::North => {
+                    match crate::grids::Direction::from(choose) {
+                        Direction::North => {
                             if let Some(north) = neighbors.north {
                                 break north;
                             }
                         }
-                        super::Direction::South => {
+                        Direction::South => {
                             if let Some(south) = neighbors.south {
                                 break south;
                             }
                         }
-                        super::Direction::East => {
+                        Direction::East => {
                             if let Some(east) = neighbors.east {
                                 break east;
                             }
                         }
-                        super::Direction::West => {
+                        Direction::West => {
                             if let Some(west) = neighbors.west {
                                 break west;
                             }
                         }
-                        super::Direction::Sentinel => {continue}
+                        Direction::Sentinel => {continue}
                     }};
                 if neighbor.1.0 == 0 || neighbor.1.0 == self.grid.dims.rows - 1 || neighbor.1.1 == 0 || neighbor.1.1 == self.grid.dims.columns - 1 {
                     continue;

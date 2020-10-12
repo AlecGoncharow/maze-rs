@@ -1,4 +1,5 @@
 /target
 maze-rs.wiki*
 *.spv
+.idea
 

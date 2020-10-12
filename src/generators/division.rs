@@ -1,16 +1,16 @@
-use crate::generators::Direction;
-use crate::grid::{Grid, GridKind};
+use crate::grids::Direction;
+use crate::grids::block_grid::{BlockGrid, GridKind};
 use rand::prelude::*;
 
 pub struct RecursiveDivider {
-    grid: Grid,
+    grid: BlockGrid,
     rng: ThreadRng,
 }
 
 impl RecursiveDivider {
     pub fn new(rows: usize, cols: usize) -> Self {
         Self {
-            grid: Grid::with_dims(rows, cols),
+            grid: BlockGrid::with_dims(rows, cols),
             rng: rand::thread_rng(),
         }
     }

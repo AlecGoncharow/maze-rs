@@ -5,23 +5,16 @@ const DEFAULT_DIMS: (usize, usize) = (16, 16);
 pub const GRID_SCALE: f32 = 1.3;
 pub const SQUARE_GAP: f32 = 0.005;
 
-use crate::generators::{Direction, Neighborhood};
 use crate::renderer::Vertex;
 use crate::State;
 
-pub struct Dimensions {
-    pub rows: usize,
-    pub columns: usize,
-}
-
-//use bit_graph::hash::HashGraph;
-//use bit_graph::baseline::AdjGraph;
 use bit_graph::search::a_star::AStarMH;
 use bit_graph::search::bfs::BFS;
 use bit_graph::search::dfs::DFS;
 use bit_graph::search::Pathfinder;
 use bit_graph::BitGraph;
 use bit_graph::Graph;
+use crate::grids::{Dimensions, Direction, Neighborhood};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum GridKind {
@@ -55,11 +48,9 @@ pub enum SolverKind {
     AStar,
 }
 
-pub struct Grid {
+pub struct BlockGrid {
     pub dims: Dimensions,
 
-    /// uses each bit of vector to represent a square in the grid as being toggled or not
-    /// this will require a refactor later but c'est la vie
     pub squares: Vec<GridKind>,
 
     pub start: Option<(usize, usize)>,
@@ -71,7 +62,7 @@ pub struct Grid {
     pub solver_kind: SolverKind,
 }
 
-impl Grid {
+impl BlockGrid {
     pub fn new() -> Self {
         Self::with_dims(DEFAULT_DIMS.0, DEFAULT_DIMS.1)
     }
@@ -512,7 +503,7 @@ mod test_grid {
 
     #[test]
     fn it_works() {
-        let mut grid = Grid::with_dims(200, 400);
+        let mut grid = BlockGrid::with_dims(200, 400);
 
         grid.set_square(1, 2, GridKind::Wall);
         grid.set_square(0, 0, GridKind::Wall);

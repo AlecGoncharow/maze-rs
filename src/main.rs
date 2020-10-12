@@ -8,8 +8,9 @@ use winit::{
 use imgui::im_str;
 
 #[allow(dead_code)]
-mod grid;
-use grid::{Grid, GridKind, SolverKind};
+mod grids;
+
+use grids::block_grid::{BlockGrid, GridKind, SolverKind};
 
 #[allow(dead_code)]
 mod renderer;
@@ -23,7 +24,7 @@ use generators::{Generator, GeneratorKind};
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
-    pub grid: Grid,
+    pub grid: BlockGrid,
     pub generator_kind: GeneratorKind,
     pub maze_generator: Box<dyn Generator>,
 
@@ -70,7 +71,7 @@ impl State {
         let rows = self.rows as usize;
         let cols = self.cols as usize;
         if rows != self.grid.dims.rows || cols != self.grid.dims.columns {
-            self.grid = Grid::with_dims(rows, cols);
+            self.grid = BlockGrid::with_dims(rows, cols);
             self.maze_generator = new_generator(self.generator_kind, self);
         }
     }
@@ -106,7 +107,7 @@ fn main() {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let hidpi_factor = window.scale_factor();
     // Since main can't be async, we're going to need to block
-    let grid = Grid::with_dims(103, 103);
+    let grid = BlockGrid::with_dims(103, 103);
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
