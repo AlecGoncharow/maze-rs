@@ -3,6 +3,9 @@ use crate::grids::block_grid::GridKind;
 #[allow(dead_code)]
 pub mod block_grid;
 
+#[allow(dead_code)]
+pub mod wall_grid;
+
 pub struct Dimensions {
     pub rows: usize,
     pub columns: usize,
@@ -100,7 +103,7 @@ impl Iterator for Neighborhood {
                         Some((west, Direction::West))
                     } else {
                         None
-                    }
+                    };
                 }
                 Direction::Sentinel => {
                     self.counter = Direction::North;
