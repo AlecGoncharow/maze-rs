@@ -1,7 +1,7 @@
 pub mod aldous_broder;
 pub mod division;
 pub mod prim;
-use crate::GridKind;
+use crate::grids::GridKind;
 
 pub trait Generator {
     fn step_generation(&mut self);

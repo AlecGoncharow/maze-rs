@@ -1,5 +1,3 @@
-use crate::grids::block_grid::GridKind;
-
 #[allow(dead_code)]
 pub mod block_grid;
 
@@ -113,4 +111,51 @@ impl Iterator for Neighborhood {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum GridKind {
+    Empty = 0,
+    Wall = 1,
+    Start = 2,
+    Goal = 3,
+    Path = 4,
+    Explored = 5,
+    Cursor = 6,
+}
+
+impl From<u8> for GridKind {
+    fn from(code: u8) -> Self {
+        match code {
+            0 => GridKind::Empty,
+            1 => GridKind::Wall,
+            2 => GridKind::Start,
+            3 => GridKind::Goal,
+            4 => GridKind::Path,
+            5 => GridKind::Explored,
+            6 => GridKind::Cursor,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<GridKind> for [f32; 4] {
+    fn from(kind: GridKind) -> Self {
+        match kind {
+            GridKind::Empty => [1.0, 1.0, 1.0, 1.0],
+            GridKind::Wall => [0.0, 0.0, 0.0, 1.0],
+            GridKind::Start => [1.0, 0.0, 0.0, 1.0],
+            GridKind::Goal => [1.0, 1.0, 0.0, 1.0],
+            GridKind::Explored => [0.2, 0.2, 0.6, 1.0],
+            GridKind::Path => [0.1, 0.5, 0.1, 1.0],
+            GridKind::Cursor => [0.0, 0.5, 0.3, 1.0],
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum SolverKind {
+    DFS,
+    BFS,
+    AStar,
 }

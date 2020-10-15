@@ -14,44 +14,12 @@ use bit_graph::search::dfs::DFS;
 use bit_graph::search::Pathfinder;
 use bit_graph::BitGraph;
 use bit_graph::Graph;
-use crate::grids::{Dimensions, Direction, Neighborhood};
-
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum GridKind {
-    Empty,
-    Wall,
-    Start,
-    Goal,
-    Path,
-    Explored,
-    Cursor,
-}
-
-impl From<GridKind> for [f32; 4] {
-    fn from(kind: GridKind) -> Self {
-        match kind {
-            GridKind::Empty => [1.0, 1.0, 1.0, 1.0],
-            GridKind::Wall => [0.0, 0.0, 0.0, 1.0],
-            GridKind::Start => [1.0, 0.0, 0.0, 1.0],
-            GridKind::Goal => [1.0, 1.0, 0.0, 1.0],
-            GridKind::Explored => [0.2, 0.2, 0.6, 1.0],
-            GridKind::Path => [0.1, 0.5, 0.1, 1.0],
-            GridKind::Cursor => [0.0, 0.5, 0.3, 1.0],
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum SolverKind {
-    DFS,
-    BFS,
-    AStar,
-}
+use crate::grids::{Dimensions, Direction, Neighborhood, GridKind, SolverKind};
 
 pub struct BlockGrid {
     pub dims: Dimensions,
 
-    pub squares: Vec<GridKind>,
+    pub cells: Vec<GridKind>,
 
     pub start: Option<(usize, usize)>,
     pub goal: Option<(usize, usize)>,
@@ -69,7 +37,7 @@ impl BlockGrid {
 
     pub fn with_dims(rows: usize, columns: usize) -> Self {
         Self {
-            squares: vec![GridKind::Empty; rows * columns],
+            cells: vec![GridKind::Empty; rows * columns],
             dims: Dimensions { rows, columns },
             start: None,
             goal: None,
@@ -84,16 +52,16 @@ impl BlockGrid {
         let word_row = self.dims.columns * row;
         let word_col = column;
 
-        let kind = self.squares[word_row + word_col];
+        let kind = self.cells[word_row + word_col];
 
         kind != GridKind::Empty
     }
 
-    pub fn get_square(&self, row: usize, column: usize) -> GridKind {
+    pub fn get_cell(&self, row: usize, column: usize) -> GridKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
 
-        self.squares[word_row + word_col]
+        self.cells[word_row + word_col]
     }
 
     // returns coords of neighbor
@@ -105,7 +73,7 @@ impl BlockGrid {
     ) -> (usize, usize) {
         let (n_row, n_col) = self.get_neighbor_coords_of(coords, direction);
 
-        self.set_square(n_row, n_col, kind);
+        self.set_cell(n_row, n_col, kind);
 
         (n_row, n_col)
     }
@@ -136,26 +104,26 @@ impl BlockGrid {
         let word_col = column;
         let index = word_row + word_col;
 
-        neighbors.north = if let Some(kind) = self.squares.get(index + self.dims.columns) {
+        neighbors.north = if let Some(kind) = self.cells.get(index + self.dims.columns) {
             Some((*kind, (row + 1, column)))
         } else {
             None
         };
 
         neighbors.south = if index >= self.dims.columns {
-            Some((self.squares[index - self.dims.columns], (row - 1, column)))
+            Some((self.cells[index - self.dims.columns], (row - 1, column)))
         } else {
             None
         };
 
         neighbors.east = if column < self.dims.columns - 1 {
-            Some((self.squares[index + 1], (row, column + 1)))
+            Some((self.cells[index + 1], (row, column + 1)))
         } else {
             None
         };
 
         neighbors.west = if column > 0 {
-            Some((self.squares[index - 1], (row, column - 1)))
+            Some((self.cells[index - 1], (row, column - 1)))
         } else {
             None
         };
@@ -163,60 +131,60 @@ impl BlockGrid {
         neighbors
     }
 
-    pub fn set_square(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
+    pub fn set_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
-        let prev_kind = self.squares[word_row + word_col];
-        self.squares[word_row + word_col] = kind;
+        let prev_kind = self.cells[word_row + word_col];
+        self.cells[word_row + word_col] = kind;
 
         prev_kind
     }
 
-    pub fn unset_square(&mut self, row: usize, column: usize) -> GridKind {
-        self.set_square(row, column, GridKind::Empty)
+    pub fn unset_cell(&mut self, row: usize, column: usize) -> GridKind {
+        self.set_cell(row, column, GridKind::Empty)
     }
 
     pub fn clear(&mut self) {
-        self.squares = vec![GridKind::Empty; self.squares.len()];
+        self.cells = vec![GridKind::Empty; self.cells.len()];
         self.start = None;
         self.goal = None;
         self.cursor = None;
     }
 
     pub fn fill(&mut self) {
-        self.squares = vec![GridKind::Wall; self.squares.len()];
+        self.cells = vec![GridKind::Wall; self.cells.len()];
         self.start = None;
         self.goal = None;
         self.cursor = None;
     }
 
-    pub fn toggle_square(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
+    pub fn toggle_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
-        let prev_kind = self.squares[word_row + word_col];
+        let prev_kind = self.cells[word_row + word_col];
 
         if prev_kind == GridKind::Empty {
-            self.squares[word_row + word_col] = kind;
+            self.cells[word_row + word_col] = kind;
         } else if prev_kind != kind {
-            self.squares[word_row + word_col] = kind;
+            self.cells[word_row + word_col] = kind;
         } else {
-            self.squares[word_row + word_col] = GridKind::Empty;
+            self.cells[word_row + word_col] = GridKind::Empty;
         }
 
         if kind == GridKind::Start {
             if let Some(start) = self.start {
-                self.unset_square(start.0, start.1);
+                self.unset_cell(start.0, start.1);
             }
-            if self.squares[word_row + word_col] == GridKind::Start {
+            if self.cells[word_row + word_col] == GridKind::Start {
                 self.start = Some((row, column));
             }
         }
 
         if kind == GridKind::Goal {
             if let Some(goal) = self.goal {
-                self.unset_square(goal.0, goal.1);
+                self.unset_cell(goal.0, goal.1);
             }
-            if self.squares[word_row + word_col] == GridKind::Goal {
+            if self.cells[word_row + word_col] == GridKind::Goal {
                 self.goal = Some((row, column));
             }
         }
@@ -251,7 +219,7 @@ impl BlockGrid {
         };
 
         if row < self.dims.rows && column < self.dims.columns {
-            self.toggle_square(row, column, kind);
+            self.toggle_cell(row, column, kind);
         }
     }
 
@@ -295,7 +263,7 @@ impl BlockGrid {
                 let up_x = low_x + sq_width;
                 let up_y = low_y + sq_height;
 
-                let color: [f32; 4] = self.get_square(row, col).into();
+                let color: [f32; 4] = self.get_cell(row, col).into();
 
                 let verts: &[Vertex] = &[
                     // lower left triangle
@@ -340,12 +308,12 @@ impl BlockGrid {
     pub fn make_graph(&mut self) {
         let mut graph = BitGraph::with_capacity(self.dims.rows * self.dims.columns);
 
-        for _ in &self.squares {
+        for _ in &self.cells {
             graph.push_node(1);
         }
 
-        for i in 0..self.squares.len() {
-            let square = &self.squares[i];
+        for i in 0..self.cells.len() {
+            let square = &self.cells[i];
             if square == &GridKind::Wall {
                 continue;
             }
@@ -353,23 +321,23 @@ impl BlockGrid {
             let col = i % self.dims.columns;
 
             if square == &GridKind::Path || square == &GridKind::Explored {
-                self.set_square(row, col, GridKind::Empty);
+                self.set_cell(row, col, GridKind::Empty);
             }
 
             // get directions
-            if row > 0 && self.squares[i - self.dims.columns] != GridKind::Wall {
+            if row > 0 && self.cells[i - self.dims.columns] != GridKind::Wall {
                 graph.add_edge(i, i - self.dims.columns);
             }
 
-            if row < self.dims.rows - 1 && self.squares[i + self.dims.columns] != GridKind::Wall {
+            if row < self.dims.rows - 1 && self.cells[i + self.dims.columns] != GridKind::Wall {
                 graph.add_edge(i, i + self.dims.columns);
             }
 
-            if col > 0 && self.squares[i - 1] != GridKind::Wall {
+            if col > 0 && self.cells[i - 1] != GridKind::Wall {
                 graph.add_edge(i, i - 1);
             }
 
-            if col < self.dims.columns - 1 && self.squares[i + 1] != GridKind::Wall {
+            if col < self.dims.columns - 1 && self.cells[i + 1] != GridKind::Wall {
                 graph.add_edge(i, i + 1);
             }
         }
@@ -403,18 +371,18 @@ impl BlockGrid {
 
         let start = self.start.unwrap();
         let goal = self.goal.unwrap();
-        self.set_square(start.0, start.1, GridKind::Start);
-        self.set_square(goal.0, goal.1, GridKind::Goal);
+        self.set_cell(start.0, start.1, GridKind::Start);
+        self.set_cell(goal.0, goal.1, GridKind::Goal);
 
         let mut index = 0;
         loop {
-            if self.squares[index] == GridKind::Cursor {
-                self.squares[index] = GridKind::Explored;
+            if self.cells[index] == GridKind::Cursor {
+                self.cells[index] = GridKind::Explored;
                 break;
             }
             index += 1;
 
-            if index >= self.squares.len() {
+            if index >= self.cells.len() {
                 break;
             }
         }
@@ -459,7 +427,7 @@ impl BlockGrid {
         };
         drop(solver);
 
-        self.set_square(row, col, kind);
+        self.set_cell(row, col, kind);
         true
     }
 
@@ -486,7 +454,7 @@ impl BlockGrid {
                 let row = path[i] / self.dims.columns;
                 let col = path[i] % self.dims.columns;
 
-                self.set_square(row, col, GridKind::Path);
+                self.set_cell(row, col, GridKind::Path);
             }
         } else {
             println!("path not found");
@@ -505,22 +473,22 @@ mod test_grid {
     fn it_works() {
         let mut grid = BlockGrid::with_dims(200, 400);
 
-        grid.set_square(1, 2, GridKind::Wall);
-        grid.set_square(0, 0, GridKind::Wall);
-        grid.set_square(4, 4, GridKind::Wall);
-        grid.set_square(3, 2, GridKind::Wall);
-        grid.set_square(1, 1, GridKind::Wall);
+        grid.set_cell(1, 2, GridKind::Wall);
+        grid.set_cell(0, 0, GridKind::Wall);
+        grid.set_cell(4, 4, GridKind::Wall);
+        grid.set_cell(3, 2, GridKind::Wall);
+        grid.set_cell(1, 1, GridKind::Wall);
 
         assert!(grid.is_set(0, 0));
         assert!(!grid.is_set(0, 1));
 
-        assert!(grid.unset_square(0, 0) == GridKind::Wall);
+        assert!(grid.unset_cell(0, 0) == GridKind::Wall);
         assert!(!grid.is_set(0, 0));
 
-        assert!(!(grid.toggle_square(14, 1, GridKind::Wall) == GridKind::Wall));
+        assert!(!(grid.toggle_cell(14, 1, GridKind::Wall) == GridKind::Wall));
         assert!(grid.is_set(14, 1));
 
-        assert!(!(grid.toggle_square(100, 300, GridKind::Wall) == GridKind::Wall));
+        assert!(!(grid.toggle_cell(100, 300, GridKind::Wall) == GridKind::Wall));
         assert!(grid.is_set(100, 300));
     }
 }

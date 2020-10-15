@@ -1,6 +1,7 @@
-use crate::grids::block_grid::{BlockGrid, GridKind};
+use crate::grids::block_grid::BlockGrid;
 use crate::generators::Generator;
 use rand::prelude::*;
+use crate::grids::GridKind;
 
 pub struct RandPrims {
     grid: BlockGrid,
@@ -36,7 +37,7 @@ impl Generator for RandPrims {
         loop {
             if self.walls.len() == 0 {
                 self.done = true;
-                self.grid.set_square(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+                self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
                 break;
             }
             let rand_wall_idx = (self.walls.len() as f32 * self.rng.gen::<f32>()) as usize;
@@ -54,9 +55,9 @@ impl Generator for RandPrims {
             }
 
             if count < 2 {
-                self.grid.set_square(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+                self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
                 self.grid
-                    .set_square(rand_wall.0, rand_wall.1, GridKind::Empty);
+                    .set_cell(rand_wall.0, rand_wall.1, GridKind::Empty);
 
                 if let Some(dir) = unwalled_dir {
                     self.last_passage = self.grid.set_neighbor_of(rand_wall, -dir, GridKind::Cursor);
@@ -80,7 +81,7 @@ impl Generator for RandPrims {
 
     fn next_step(&mut self) -> Vec<GridKind> {
         self.step_generation();
-        self.grid.squares.clone()
+        self.grid.cells.clone()
     }
 
     fn generate_maze(&mut self) -> Vec<GridKind> {
@@ -90,9 +91,9 @@ impl Generator for RandPrims {
                 break;
             }
         }
-        self.grid.set_square(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+        self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
 
-        self.grid.squares.clone()
+        self.grid.cells.clone()
     }
 
     fn is_done(&self) -> bool {

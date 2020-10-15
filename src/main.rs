@@ -10,7 +10,7 @@ use imgui::im_str;
 #[allow(dead_code)]
 mod grids;
 
-use grids::block_grid::{BlockGrid, GridKind, SolverKind};
+use grids::block_grid::BlockGrid;
 
 #[allow(dead_code)]
 mod renderer;
@@ -21,6 +21,7 @@ mod generators;
 use generators::aldous_broder::AldousBroder;
 use generators::prim::RandPrims;
 use generators::{Generator, GeneratorKind};
+use grids::{GridKind, SolverKind};
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
@@ -303,7 +304,7 @@ fn main() {
                             if ui.button(im_str!("Generate Maze"), [250., 20.]) {
                                 state.maze_generator = new_generator(state.generator_kind, &state);
                                 let squares = state.maze_generator.generate_maze();
-                                state.grid.squares = squares;
+                                state.grid.cells = squares;
                             }
                             ui.separator();
                             if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
@@ -316,7 +317,7 @@ fn main() {
                             ui.same_line(150.);
                             if ui.button(im_str!("Step Maze"), [125., 20.]) {
                                 let squares = state.maze_generator.next_step();
-                                state.grid.squares = squares;
+                                state.grid.cells = squares;
                             }
 
                             ui.separator();
@@ -371,7 +372,7 @@ fn main() {
                 }
 
                 if expanded_gen_running {
-                    state.grid.squares = state.maze_generator.next_step();
+                    state.grid.cells = state.maze_generator.next_step();
                     expanded_gen_running = !state.maze_generator.is_done();
                 }
 

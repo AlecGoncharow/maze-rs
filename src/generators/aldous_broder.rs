@@ -1,7 +1,7 @@
-use crate::grids::block_grid::{BlockGrid, GridKind};
+use crate::grids::block_grid::BlockGrid;
 use crate::generators::Generator;
 use rand::prelude::*;
-use crate::grids::Direction;
+use crate::grids::{Direction, GridKind};
 
 pub struct AldousBroder {
     grid: BlockGrid,
@@ -45,7 +45,7 @@ impl Generator for AldousBroder {
             if !self.visited.contains(&false) {
                 self.done = true;
                 self.grid
-                    .set_square(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
+                    .set_cell(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
                 return;
             }
             let neighbor_idx = (self.current_cell.0 * self.grid.dims.columns) + self.current_cell.1;
@@ -102,7 +102,7 @@ impl Generator for AldousBroder {
                 }
             }
             self.grid
-                    .set_square(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
+                    .set_cell(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
         
             if count == 1 {
                 self.current_cell_kind = GridKind::Empty;
@@ -113,12 +113,12 @@ impl Generator for AldousBroder {
             let rand_neighbor_idx = (rand_neighbor.1.0 * self.grid.dims.columns) + rand_neighbor.1.1;
             self.visited[rand_neighbor_idx] = true;
             self.grid
-                    .set_square(rand_neighbor.1.0, rand_neighbor.1.1, GridKind::Cursor);
+                    .set_cell(rand_neighbor.1.0, rand_neighbor.1.1, GridKind::Cursor);
     }
 
     fn next_step(&mut self) -> Vec<GridKind> {
         self.step_generation();
-        self.grid.squares.clone()
+        self.grid.cells.clone()
     }
 
     fn generate_maze(&mut self) -> Vec<GridKind> {
@@ -129,9 +129,9 @@ impl Generator for AldousBroder {
             }
         }
         self.grid
-            .set_square(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
+            .set_cell(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
 
-        self.grid.squares.clone()
+        self.grid.cells.clone()
     }
 
 
