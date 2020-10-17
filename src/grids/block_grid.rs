@@ -1,5 +1,3 @@
-const WORD_BYTES: usize = std::mem::size_of::<usize>();
-const WORD_BITS: usize = WORD_BYTES * 8;
 const DEFAULT_DIMS: (usize, usize) = (16, 16);
 
 pub const GRID_SCALE: f32 = 1.3;
@@ -8,13 +6,13 @@ pub const SQUARE_GAP: f32 = 0.005;
 use crate::renderer::Vertex;
 use crate::State;
 
+use crate::grids::{Dimensions, Direction, GridKind, Neighborhood, SolverKind};
 use bit_graph::search::a_star::AStarMH;
 use bit_graph::search::bfs::BFS;
 use bit_graph::search::dfs::DFS;
 use bit_graph::search::Pathfinder;
 use bit_graph::BitGraph;
 use bit_graph::Graph;
-use crate::grids::{Dimensions, Direction, Neighborhood, GridKind, SolverKind};
 
 pub struct BlockGrid {
     pub dims: Dimensions,
