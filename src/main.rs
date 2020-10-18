@@ -11,6 +11,7 @@ use imgui::im_str;
 mod grids;
 
 use grids::block_grid::BlockGrid;
+use grids::wall_grid::WallGrid;
 
 #[allow(dead_code)]
 mod renderer;
@@ -26,6 +27,7 @@ use grids::{GridKind, SolverKind};
 pub struct State {
     pub gfx_ctx: GraphicsContext,
     pub grid: BlockGrid,
+    pub wall_grid: WallGrid,
     pub generator_kind: GeneratorKind,
     pub maze_generator: Box<dyn Generator>,
 
@@ -57,6 +59,8 @@ impl State {
                 if state == &ElementState::Pressed {
                     self.grid
                         .handle_click((self.last_x, self.last_y), self.gfx_ctx.size, kind);
+                    self.wall_grid
+                        .handle_click((self.last_x, self.last_y), self.gfx_ctx.size, kind)
                 }
                 true
             }
@@ -80,7 +84,8 @@ impl State {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.gfx_ctx.start(view, device, queue);
 
-        let verts = self.grid.render(self);
+        //let verts = self.grid.render(self);
+        let verts = self.wall_grid.render(self);
 
         self.gfx_ctx.draw(&verts, view, device);
 
@@ -109,6 +114,7 @@ fn main() {
     let hidpi_factor = window.scale_factor();
     // Since main can't be async, we're going to need to block
     let grid = BlockGrid::with_dims(103, 103);
+    let wall_grid = WallGrid::with_dims(17, 17);
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -183,6 +189,7 @@ fn main() {
         generator_kind,
         maze_generator,
         grid,
+        wall_grid,
         last_x: 0.0,
         last_y: 0.0,
     };

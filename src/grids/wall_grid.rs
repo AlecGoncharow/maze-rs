@@ -1,6 +1,6 @@
 const DEFAULT_DIMS: (usize, usize) = (15, 15);
 
-use crate::grids::{Dimensions, Direction, GridKind};
+use crate::grids::{Dimensions, GridKind};
 use bit_graph::{BitGraph, Graph};
 pub const GRID_SCALE: f32 = 1.3;
 pub const SQUARE_GAP: f32 = 0.005;
@@ -217,6 +217,92 @@ impl WallGrid {
                 grid.append(&mut Vec::from(verts));
 
                 offset_x += sq_width + SQUARE_GAP;
+                if col != self.dims.columns - 1 {
+                    let index = (row * self.dims.columns) + col;
+                    let color: [f32; 4] = if self.graph.has_edge(index, index + 1) {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else {
+                        [0.0, 0.0, 0.0, 1.0]
+                    };
+                    let low_x = low_x + sq_width;
+                    let up_x = low_x + SQUARE_GAP;
+                    let up_y = up_y + SQUARE_GAP;
+
+                    let verts: &[Vertex] = &[
+                        // lower left triangle
+                        Vertex {
+                            position: [low_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [low_x, up_y],
+                            color,
+                        },
+                        // upper right triangle
+                        Vertex {
+                            position: [low_x, up_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, up_y],
+                            color,
+                        },
+                    ];
+
+                    grid.append(&mut Vec::from(verts));
+                }
+
+                if row != self.dims.rows - 1 {
+                    let index = (row * self.dims.columns) + col;
+
+                    let color: [f32; 4] = if self.graph.has_edge(index, index + self.dims.columns) {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else {
+                        [0.0, 0.0, 0.0, 1.0]
+                    };
+                    let up_x = low_x + SQUARE_GAP + sq_width;
+                    let low_y = up_y;
+                    let up_y = low_y + SQUARE_GAP;
+
+                    let verts: &[Vertex] = &[
+                        // lower left triangle
+                        Vertex {
+                            position: [low_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [low_x, up_y],
+                            color,
+                        },
+                        // upper right triangle
+                        Vertex {
+                            position: [low_x, up_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, low_y],
+                            color,
+                        },
+                        Vertex {
+                            position: [up_x, up_y],
+                            color,
+                        },
+                    ];
+
+                    grid.append(&mut Vec::from(verts));
+                }
             }
             offset_y += sq_height + SQUARE_GAP;
             offset_x = center_x;

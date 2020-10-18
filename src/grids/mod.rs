@@ -4,6 +4,11 @@ pub mod block_grid;
 #[allow(dead_code)]
 pub mod wall_grid;
 
+pub enum RealGridKind {
+    Block,
+    Wall,
+}
+
 pub struct Dimensions {
     pub rows: usize,
     pub columns: usize,
@@ -114,6 +119,7 @@ impl Iterator for Neighborhood {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
+// @TODO @FIXME should be renamed to CellKind
 pub enum GridKind {
     Empty = 0,
     Wall = 1,
@@ -158,4 +164,29 @@ pub enum SolverKind {
     DFS,
     BFS,
     AStar,
+}
+
+pub trait Grid {
+    fn render(&self, state: &crate::State) -> Vec<crate::renderer::Vertex>;
+    fn cells(&self) -> &Vec<GridKind>;
+    fn set_cells(&mut self, cells: Vec<GridKind>);
+    fn set_solver_kind(&mut self, kind: SolverKind);
+    fn solve_path(&mut self);
+    fn step_solve_path(&mut self);
+    fn clear(&mut self);
+    fn fill(&mut self);
+    fn handle_click(
+        &mut self,
+        pos: (f32, f32),
+        size: winit::dpi::PhysicalSize<u32>,
+        kind: GridKind,
+    );
+    fn get_neighborhood_of(&self, row: usize, column: usize) -> Neighborhood;
+    fn set_neighbor_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: Direction,
+        kind: GridKind,
+    ) -> (usize, usize);
+    fn set_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind;
 }
