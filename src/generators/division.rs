@@ -1,5 +1,5 @@
 use crate::grids::block_grid::BlockGrid;
-use crate::grids::{Direction, GridKind};
+use crate::grids::{Direction, Grid, CellKind};
 use rand::prelude::*;
 
 pub struct RecursiveDivider {
@@ -15,7 +15,7 @@ impl RecursiveDivider {
         }
     }
 
-    pub fn generate_maze(&mut self) -> Vec<GridKind> {
+    pub fn generate_maze(&mut self) -> Vec<CellKind> {
         self.subdivide(
             (1, 1),
             (self.grid.dims.rows - 1, self.grid.dims.columns - 1),
@@ -73,14 +73,14 @@ impl RecursiveDivider {
         );
         // divide grid
         for i in bottom_left.0 - 1..top_right.0 + 1 {
-            self.grid.set_cell(divide_y, i, GridKind::Wall);
+            self.grid.set_cell(divide_y, i, CellKind::Wall);
         }
         for i in bottom_left.1 - 1..top_right.1 + 1 {
-            self.grid.set_cell(i, divide_x, GridKind::Wall);
+            self.grid.set_cell(i, divide_x, CellKind::Wall);
         }
 
         for (i, j) in dont_wall.iter() {
-            self.grid.set_cell(*i, *j, GridKind::Empty);
+            self.grid.set_cell(*i, *j, CellKind::Empty);
         }
 
         // break walls
@@ -106,7 +106,7 @@ impl RecursiveDivider {
                 Direction::North => {
                     let break_point =
                         divide_y + 1 + ((top_right.1 - divide_y) as f64 * rng) as usize;
-                    self.grid.set_cell(break_point, divide_x, GridKind::Empty);
+                    self.grid.set_cell(break_point, divide_x, CellKind::Empty);
                     if divide_x + 1 < self.grid.dims.columns {
                         dont_wall.push((break_point, divide_x + 1));
                     }
@@ -117,7 +117,7 @@ impl RecursiveDivider {
                 Direction::South => {
                     let break_point =
                         divide_y - 1 - ((divide_y - bottom_left.1) as f64 * rng) as usize;
-                    self.grid.set_cell(break_point, divide_x, GridKind::Empty);
+                    self.grid.set_cell(break_point, divide_x, CellKind::Empty);
                     if divide_x + 1 < self.grid.dims.columns {
                         dont_wall.push((break_point, divide_x + 1));
                     }
@@ -128,7 +128,7 @@ impl RecursiveDivider {
                 Direction::East => {
                     let break_point =
                         divide_x + 1 + ((top_right.0 - divide_x) as f64 * rng) as usize;
-                    self.grid.set_cell(divide_y, break_point, GridKind::Empty);
+                    self.grid.set_cell(divide_y, break_point, CellKind::Empty);
                     if divide_y + 1 < self.grid.dims.rows {
                         dont_wall.push((divide_y + 1, break_point));
                     }
@@ -139,7 +139,7 @@ impl RecursiveDivider {
                 Direction::West => {
                     let break_point =
                         divide_x - 1 - ((divide_x - bottom_left.0) as f64 * rng) as usize;
-                    self.grid.set_cell(divide_y, break_point, GridKind::Empty);
+                    self.grid.set_cell(divide_y, break_point, CellKind::Empty);
                     if divide_y + 1 < self.grid.dims.rows {
                         dont_wall.push((divide_y + 1, break_point));
                     }

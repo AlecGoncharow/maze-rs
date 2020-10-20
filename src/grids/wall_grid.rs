@@ -1,6 +1,6 @@
 const DEFAULT_DIMS: (usize, usize) = (15, 15);
 
-use crate::grids::{Dimensions, GridKind};
+use crate::grids::{Dimensions, Grid, CellKind};
 use bit_graph::{BitGraph, Graph};
 pub const GRID_SCALE: f32 = 1.3;
 pub const SQUARE_GAP: f32 = 0.005;
@@ -13,7 +13,7 @@ type WalledCell = u8;
 pub struct WallGrid {
     pub dims: Dimensions,
 
-    pub cells: Vec<GridKind>,
+    pub cells: Vec<CellKind>,
     // graph edges represents existance of wall or not
     pub graph: Box<dyn Graph<u64, bool>>,
 
@@ -29,7 +29,7 @@ impl WallGrid {
 
     pub fn with_dims(rows: usize, columns: usize) -> Self {
         Self {
-            cells: vec![GridKind::Empty; rows * columns],
+            cells: vec![CellKind::Empty; rows * columns],
             dims: Dimensions { rows, columns },
             graph: Box::new(BitGraph::with_capacity(rows * columns)),
             start: None,
@@ -56,32 +56,32 @@ impl WallGrid {
         self.graph.add_edge(index_two, index_one);
     }
 
-    pub fn toggle_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
+    pub fn toggle_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind {
         let index = self.index_of(row, column);
         let prev_kind = self.cells[index];
 
-        if prev_kind == GridKind::Empty {
+        if prev_kind == CellKind::Empty {
             self.cells[index] = kind;
         } else if prev_kind != kind {
             self.cells[index] = kind;
         } else {
-            self.cells[index] = GridKind::Empty;
+            self.cells[index] = CellKind::Empty;
         }
 
-        if kind == GridKind::Start {
+        if kind == CellKind::Start {
             if let Some(start) = self.start {
                 self.unset_cell(start.0, start.1);
             }
-            if self.cells[index] == GridKind::Start {
+            if self.cells[index] == CellKind::Start {
                 self.start = Some((row, column));
             }
         }
 
-        if kind == GridKind::Goal {
+        if kind == CellKind::Goal {
             if let Some(goal) = self.goal {
                 self.unset_cell(goal.0, goal.1);
             }
-            if self.cells[index] == GridKind::Goal {
+            if self.cells[index] == CellKind::Goal {
                 self.goal = Some((row, column));
             }
         }
@@ -95,28 +95,53 @@ impl WallGrid {
     }
 
     #[inline]
-    pub fn get_cell(&self, row: usize, column: usize) -> GridKind {
+    pub fn unset_cell(&mut self, row: usize, column: usize) -> CellKind {
+        self.set_cell(row, column, CellKind::Empty)
+    }
+
+    fn get_ndc_params(&self, size: winit::dpi::PhysicalSize<u32>) -> (f32, f32, f32, f32) {
+        let ratio = size.width as f32 / size.height as f32;
+        let (sq_width, sq_height) = if ratio >= 1.0 {
+            (
+                GRID_SCALE / self.dims.columns as f32 / ratio,
+                GRID_SCALE / self.dims.rows as f32,
+            )
+        } else {
+            (
+                GRID_SCALE / self.dims.columns as f32,
+                GRID_SCALE / self.dims.rows as f32 * ratio,
+            )
+        };
+
+        // centers the grid somehow, this will need some additional calculations to detect large
+        // gaps, but good enough for now to buy space
+        let bottom_left_x =
+            (2.0 - (GRID_SCALE + (self.dims.columns as f32 * SQUARE_GAP))) / 2.0 - 1.0;
+        let bottom_left_y = (2.0 - (GRID_SCALE + (self.dims.rows as f32 * SQUARE_GAP))) / 2.0 - 1.0;
+
+        (sq_width, sq_height, bottom_left_x, bottom_left_y)
+    }
+}
+
+impl Grid for WallGrid {
+    #[inline]
+    fn get_cell(&self, row: usize, column: usize) -> CellKind {
         self.cells[self.index_of(row, column)]
     }
 
     #[inline]
-    pub fn set_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
+    fn set_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind {
         let index = self.index_of(row, column);
         let prev_kind = self.cells[index];
         self.cells[index] = kind;
         prev_kind
     }
 
-    #[inline]
-    pub fn unset_cell(&mut self, row: usize, column: usize) -> GridKind {
-        self.set_cell(row, column, GridKind::Empty)
-    }
-
-    pub fn handle_click(
+    fn handle_click(
         &mut self,
         pos: (f32, f32),
         size: winit::dpi::PhysicalSize<u32>,
-        kind: GridKind,
+        kind: CellKind,
     ) {
         let x = (2.0 * pos.0) - 1.0;
         let y = (2.0 * pos.1) - 1.0;
@@ -143,30 +168,7 @@ impl WallGrid {
         }
     }
 
-    fn get_ndc_params(&self, size: winit::dpi::PhysicalSize<u32>) -> (f32, f32, f32, f32) {
-        let ratio = size.width as f32 / size.height as f32;
-        let (sq_width, sq_height) = if ratio >= 1.0 {
-            (
-                GRID_SCALE / self.dims.columns as f32 / ratio,
-                GRID_SCALE / self.dims.rows as f32,
-            )
-        } else {
-            (
-                GRID_SCALE / self.dims.columns as f32,
-                GRID_SCALE / self.dims.rows as f32 * ratio,
-            )
-        };
-
-        // centers the grid somehow, this will need some additional calculations to detect large
-        // gaps, but good enough for now to buy space
-        let bottom_left_x =
-            (2.0 - (GRID_SCALE + (self.dims.columns as f32 * SQUARE_GAP))) / 2.0 - 1.0;
-        let bottom_left_y = (2.0 - (GRID_SCALE + (self.dims.rows as f32 * SQUARE_GAP))) / 2.0 - 1.0;
-
-        (sq_width, sq_height, bottom_left_x, bottom_left_y)
-    }
-
-    pub fn render(&self, state: &State) -> Vec<Vertex> {
+    fn render(&self, state: &State) -> Vec<Vertex> {
         let mut grid = Vec::new();
         let (sq_width, sq_height, center_x, center_y) = self.get_ndc_params(state.gfx_ctx.size);
 
@@ -309,5 +311,46 @@ impl WallGrid {
         }
 
         grid
+    }
+
+    fn cells(&self) -> &Vec<CellKind> {
+        todo!()
+    }
+
+    fn set_cells(&mut self, cells: Vec<CellKind>) {
+        todo!()
+    }
+
+    fn set_solver_kind(&mut self, kind: super::SolverKind) {
+        todo!()
+    }
+
+    fn solve_path(&mut self) {
+        todo!()
+    }
+
+    fn step_solve_path(&mut self) -> bool {
+        todo!()
+    }
+
+    fn clear(&mut self) {
+        todo!()
+    }
+
+    fn fill(&mut self) {
+        todo!()
+    }
+
+    fn get_neighborhood_of(&self, row: usize, column: usize) -> super::Neighborhood {
+        todo!()
+    }
+
+    fn set_neighbor_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: super::Direction,
+        kind: CellKind,
+    ) -> (usize, usize) {
+        todo!()
     }
 }

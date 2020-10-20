@@ -1,7 +1,7 @@
 use crate::grids::block_grid::BlockGrid;
 use crate::generators::Generator;
 use rand::prelude::*;
-use crate::grids::GridKind;
+use crate::grids::{CellKind, Grid};
 
 pub struct RandPrims {
     grid: BlockGrid,
@@ -37,7 +37,7 @@ impl Generator for RandPrims {
         loop {
             if self.walls.len() == 0 {
                 self.done = true;
-                self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+                self.grid.set_cell(self.last_passage.0, self.last_passage.1, CellKind::Empty);
                 break;
             }
             let rand_wall_idx = (self.walls.len() as f32 * self.rng.gen::<f32>()) as usize;
@@ -48,24 +48,24 @@ impl Generator for RandPrims {
             let mut count = 0;
             let mut unwalled_dir = None;
             for (neighbor, dir) in neighbors {
-                if neighbor.0 != GridKind::Wall {
+                if neighbor.0 != CellKind::Wall {
                     count += 1;
                     unwalled_dir = Some(dir);
                 }
             }
 
             if count < 2 {
-                self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+                self.grid.set_cell(self.last_passage.0, self.last_passage.1, CellKind::Empty);
                 self.grid
-                    .set_cell(rand_wall.0, rand_wall.1, GridKind::Empty);
+                    .set_cell(rand_wall.0, rand_wall.1, CellKind::Empty);
 
                 if let Some(dir) = unwalled_dir {
-                    self.last_passage = self.grid.set_neighbor_of(rand_wall, -dir, GridKind::Cursor);
+                    self.last_passage = self.grid.set_neighbor_of(rand_wall, -dir, CellKind::Cursor);
                 }
                 let mut walls_to_add = Vec::new();
                 for (neighbor, _) in self.grid.get_neighborhood_of(self.last_passage.0, self.last_passage.1) {
 
-                    if neighbor.0 == GridKind::Wall {
+                    if neighbor.0 == CellKind::Wall {
                         if neighbor.1.0 == 0 || neighbor.1.0 == self.grid.dims.rows - 1 || neighbor.1.1 == 0 || neighbor.1.1 == self.grid.dims.columns - 1 {
                             continue;
                         }
@@ -79,19 +79,19 @@ impl Generator for RandPrims {
         }
     }
 
-    fn next_step(&mut self) -> Vec<GridKind> {
+    fn next_step(&mut self) -> Vec<CellKind> {
         self.step_generation();
         self.grid.cells.clone()
     }
 
-    fn generate_maze(&mut self) -> Vec<GridKind> {
+    fn generate_maze(&mut self) -> Vec<CellKind> {
         loop {
             self.step_generation();
             if self.done {
                 break;
             }
         }
-        self.grid.set_cell(self.last_passage.0, self.last_passage.1, GridKind::Empty);
+        self.grid.set_cell(self.last_passage.0, self.last_passage.1, CellKind::Empty);
 
         self.grid.cells.clone()
     }

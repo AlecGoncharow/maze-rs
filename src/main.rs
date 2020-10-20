@@ -22,7 +22,7 @@ mod generators;
 use generators::aldous_broder::AldousBroder;
 use generators::prim::RandPrims;
 use generators::{Generator, GeneratorKind};
-use grids::{GridKind, SolverKind};
+use grids::{Grid, CellKind, SolverKind};
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
@@ -40,7 +40,7 @@ pub struct State {
 
 impl State {
     // returns false if event hasn't been fully processed
-    fn input(&mut self, event: &WindowEvent, kind: GridKind) -> bool {
+    fn input(&mut self, event: &WindowEvent, kind: CellKind) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 self.last_x = position.x as f32 / self.gfx_ctx.size.width as f32;
@@ -197,7 +197,7 @@ fn main() {
     let mut last_frame = std::time::Instant::now();
     let mut last_cursor = None;
     let mut show_demo = false;
-    let mut grid_kind = GridKind::Wall;
+    let mut grid_kind = CellKind::Wall;
     let mut expanded_solve_running = false;
     let mut expanded_gen_running = false;
 
@@ -268,16 +268,16 @@ fn main() {
 
                             ui.separator();
 
-                            if ui.radio_button(im_str!("Wall"), &mut grid_kind, GridKind::Wall) {
-                                grid_kind = GridKind::Wall;
+                            if ui.radio_button(im_str!("Wall"), &mut grid_kind, CellKind::Wall) {
+                                grid_kind = CellKind::Wall;
                             }
                             ui.same_line(100.);
-                            if ui.radio_button(im_str!("Start"), &mut grid_kind, GridKind::Start) {
-                                grid_kind = GridKind::Start;
+                            if ui.radio_button(im_str!("Start"), &mut grid_kind, CellKind::Start) {
+                                grid_kind = CellKind::Start;
                             }
                             ui.same_line(200.);
-                            if ui.radio_button(im_str!("Goal"), &mut grid_kind, GridKind::Goal) {
-                                grid_kind = GridKind::Goal;
+                            if ui.radio_button(im_str!("Goal"), &mut grid_kind, CellKind::Goal) {
+                                grid_kind = CellKind::Goal;
                             }
                             ui.separator();
                             if ui.button(im_str!("Clear Grid"), [125., 20.]) {

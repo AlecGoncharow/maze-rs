@@ -1,14 +1,14 @@
 use crate::grids::block_grid::BlockGrid;
 use crate::generators::Generator;
 use rand::prelude::*;
-use crate::grids::{Direction, GridKind};
+use crate::grids::{Direction, CellKind, Grid};
 
 pub struct AldousBroder {
     grid: BlockGrid,
     visited: Vec<bool>,
     rng: ThreadRng,
     current_cell: (usize, usize),
-    current_cell_kind: GridKind,
+    current_cell_kind: CellKind,
     pub done: bool,
 }
 
@@ -33,7 +33,7 @@ impl AldousBroder {
             visited,
             rng: rand::thread_rng(),
             current_cell,
-            current_cell_kind: GridKind::Empty,
+            current_cell_kind: CellKind::Empty,
             done: false,
         }
     }
@@ -97,7 +97,7 @@ impl Generator for AldousBroder {
 
             let mut count = 0;
             for neighbor in neighborhood_of_neighor {
-                if (neighbor.0.0 != GridKind::Wall && neighbor.0.0 != GridKind::Cursor) || (self.current_cell_kind != GridKind::Wall && neighbor.0.0 == GridKind::Cursor) {
+                if (neighbor.0.0 != CellKind::Wall && neighbor.0.0 != CellKind::Cursor) || (self.current_cell_kind != CellKind::Wall && neighbor.0.0 == CellKind::Cursor) {
                     count += 1;
                 }
             }
@@ -105,7 +105,7 @@ impl Generator for AldousBroder {
                     .set_cell(self.current_cell.0, self.current_cell.1, self.current_cell_kind);
         
             if count == 1 {
-                self.current_cell_kind = GridKind::Empty;
+                self.current_cell_kind = CellKind::Empty;
             } else {
                 self.current_cell_kind = rand_neighbor.0;
             }
@@ -113,15 +113,15 @@ impl Generator for AldousBroder {
             let rand_neighbor_idx = (rand_neighbor.1.0 * self.grid.dims.columns) + rand_neighbor.1.1;
             self.visited[rand_neighbor_idx] = true;
             self.grid
-                    .set_cell(rand_neighbor.1.0, rand_neighbor.1.1, GridKind::Cursor);
+                    .set_cell(rand_neighbor.1.0, rand_neighbor.1.1, CellKind::Cursor);
     }
 
-    fn next_step(&mut self) -> Vec<GridKind> {
+    fn next_step(&mut self) -> Vec<CellKind> {
         self.step_generation();
         self.grid.cells.clone()
     }
 
-    fn generate_maze(&mut self) -> Vec<GridKind> {
+    fn generate_maze(&mut self) -> Vec<CellKind> {
         loop {
             self.step_generation();
             if self.done {

@@ -4,7 +4,7 @@ pub mod block_grid;
 #[allow(dead_code)]
 pub mod wall_grid;
 
-pub enum RealGridKind {
+pub enum GridKind {
     Block,
     Wall,
 }
@@ -50,7 +50,7 @@ impl From<usize> for Direction {
     }
 }
 
-pub type Neighbor = (GridKind, (usize, usize));
+pub type Neighbor = (CellKind, (usize, usize));
 
 #[derive(Debug, Clone, Copy)]
 pub struct Neighborhood {
@@ -120,7 +120,7 @@ impl Iterator for Neighborhood {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 // @TODO @FIXME should be renamed to CellKind
-pub enum GridKind {
+pub enum CellKind {
     Empty = 0,
     Wall = 1,
     Start = 2,
@@ -130,31 +130,31 @@ pub enum GridKind {
     Cursor = 6,
 }
 
-impl From<u8> for GridKind {
+impl From<u8> for CellKind {
     fn from(code: u8) -> Self {
         match code {
-            0 => GridKind::Empty,
-            1 => GridKind::Wall,
-            2 => GridKind::Start,
-            3 => GridKind::Goal,
-            4 => GridKind::Path,
-            5 => GridKind::Explored,
-            6 => GridKind::Cursor,
+            0 => CellKind::Empty,
+            1 => CellKind::Wall,
+            2 => CellKind::Start,
+            3 => CellKind::Goal,
+            4 => CellKind::Path,
+            5 => CellKind::Explored,
+            6 => CellKind::Cursor,
             _ => unreachable!(),
         }
     }
 }
 
-impl From<GridKind> for [f32; 4] {
-    fn from(kind: GridKind) -> Self {
+impl From<CellKind> for [f32; 4] {
+    fn from(kind: CellKind) -> Self {
         match kind {
-            GridKind::Empty => [1.0, 1.0, 1.0, 1.0],
-            GridKind::Wall => [0.0, 0.0, 0.0, 1.0],
-            GridKind::Start => [1.0, 0.0, 0.0, 1.0],
-            GridKind::Goal => [1.0, 1.0, 0.0, 1.0],
-            GridKind::Explored => [0.2, 0.2, 0.6, 1.0],
-            GridKind::Path => [0.1, 0.5, 0.1, 1.0],
-            GridKind::Cursor => [0.0, 0.5, 0.3, 1.0],
+            CellKind::Empty => [1.0, 1.0, 1.0, 1.0],
+            CellKind::Wall => [0.0, 0.0, 0.0, 1.0],
+            CellKind::Start => [1.0, 0.0, 0.0, 1.0],
+            CellKind::Goal => [1.0, 1.0, 0.0, 1.0],
+            CellKind::Explored => [0.2, 0.2, 0.6, 1.0],
+            CellKind::Path => [0.1, 0.5, 0.1, 1.0],
+            CellKind::Cursor => [0.0, 0.5, 0.3, 1.0],
         }
     }
 }
@@ -168,25 +168,26 @@ pub enum SolverKind {
 
 pub trait Grid {
     fn render(&self, state: &crate::State) -> Vec<crate::renderer::Vertex>;
-    fn cells(&self) -> &Vec<GridKind>;
-    fn set_cells(&mut self, cells: Vec<GridKind>);
+    fn cells(&self) -> &Vec<CellKind>;
+    fn set_cells(&mut self, cells: Vec<CellKind>);
     fn set_solver_kind(&mut self, kind: SolverKind);
     fn solve_path(&mut self);
-    fn step_solve_path(&mut self);
+    fn step_solve_path(&mut self) -> bool;
     fn clear(&mut self);
     fn fill(&mut self);
     fn handle_click(
         &mut self,
         pos: (f32, f32),
         size: winit::dpi::PhysicalSize<u32>,
-        kind: GridKind,
+        kind: CellKind,
     );
     fn get_neighborhood_of(&self, row: usize, column: usize) -> Neighborhood;
     fn set_neighbor_of(
         &mut self,
         coords: (usize, usize),
         direction: Direction,
-        kind: GridKind,
+        kind: CellKind,
     ) -> (usize, usize);
-    fn set_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind;
+    fn set_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind;
+    fn get_cell(&self, row: usize, column: usize) -> CellKind;
 }

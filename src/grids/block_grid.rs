@@ -6,7 +6,7 @@ pub const SQUARE_GAP: f32 = 0.005;
 use crate::renderer::Vertex;
 use crate::State;
 
-use crate::grids::{Dimensions, Direction, GridKind, Neighborhood, SolverKind};
+use crate::grids::{Dimensions, Direction, Grid, CellKind, Neighborhood, SolverKind};
 use bit_graph::search::a_star::AStarMH;
 use bit_graph::search::bfs::BFS;
 use bit_graph::search::dfs::DFS;
@@ -17,7 +17,7 @@ use bit_graph::Graph;
 pub struct BlockGrid {
     pub dims: Dimensions,
 
-    pub cells: Vec<GridKind>,
+    pub cells: Vec<CellKind>,
 
     pub start: Option<(usize, usize)>,
     pub goal: Option<(usize, usize)>,
@@ -35,7 +35,7 @@ impl BlockGrid {
 
     pub fn with_dims(rows: usize, columns: usize) -> Self {
         Self {
-            cells: vec![GridKind::Empty; rows * columns],
+            cells: vec![CellKind::Empty; rows * columns],
             dims: Dimensions { rows, columns },
             start: None,
             goal: None,
@@ -52,32 +52,72 @@ impl BlockGrid {
 
         let kind = self.cells[word_row + word_col];
 
-        kind != GridKind::Empty
+        kind != CellKind::Empty
     }
 
-    pub fn get_cell(&self, row: usize, column: usize) -> GridKind {
+    pub fn unset_cell(&mut self, row: usize, column: usize) -> CellKind {
+        self.set_cell(row, column, CellKind::Empty)
+    }
+
+    fn get_ndc_params(&self, size: winit::dpi::PhysicalSize<u32>) -> (f32, f32, f32, f32) {
+        let ratio = size.width as f32 / size.height as f32;
+        let (sq_width, sq_height) = if ratio >= 1.0 {
+            (
+                GRID_SCALE / self.dims.columns as f32 / ratio,
+                GRID_SCALE / self.dims.rows as f32,
+            )
+        } else {
+            (
+                GRID_SCALE / self.dims.columns as f32,
+                GRID_SCALE / self.dims.rows as f32 * ratio,
+            )
+        };
+
+        // centers the grid somehow, this will need some additional calculations to detect large
+        // gaps, but good enough for now to buy space
+        let bottom_left_x =
+            (2.0 - (GRID_SCALE + (self.dims.columns as f32 * SQUARE_GAP))) / 2.0 - 1.0;
+        let bottom_left_y = (2.0 - (GRID_SCALE + (self.dims.rows as f32 * SQUARE_GAP))) / 2.0 - 1.0;
+
+        (sq_width, sq_height, bottom_left_x, bottom_left_y)
+    }
+
+    pub fn toggle_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
+        let prev_kind = self.cells[word_row + word_col];
 
-        self.cells[word_row + word_col]
+        if prev_kind == CellKind::Empty {
+            self.cells[word_row + word_col] = kind;
+        } else if prev_kind != kind {
+            self.cells[word_row + word_col] = kind;
+        } else {
+            self.cells[word_row + word_col] = CellKind::Empty;
+        }
+
+        if kind == CellKind::Start {
+            if let Some(start) = self.start {
+                self.unset_cell(start.0, start.1);
+            }
+            if self.cells[word_row + word_col] == CellKind::Start {
+                self.start = Some((row, column));
+            }
+        }
+
+        if kind == CellKind::Goal {
+            if let Some(goal) = self.goal {
+                self.unset_cell(goal.0, goal.1);
+            }
+            if self.cells[word_row + word_col] == CellKind::Goal {
+                self.goal = Some((row, column));
+            }
+        }
+
+        prev_kind
     }
 
     // returns coords of neighbor
-    pub fn set_neighbor_of(
-        &mut self,
-        coords: (usize, usize),
-        direction: Direction,
-        kind: GridKind,
-    ) -> (usize, usize) {
-        let (n_row, n_col) = self.get_neighbor_coords_of(coords, direction);
-
-        self.set_cell(n_row, n_col, kind);
-
-        (n_row, n_col)
-    }
-
-    // returns coords of neighbor
-    pub fn get_neighbor_coords_of(
+    fn get_neighbor_coords_of(
         &mut self,
         coords: (usize, usize),
         direction: Direction,
@@ -96,7 +136,89 @@ impl BlockGrid {
         (n_row, n_col)
     }
 
-    pub fn get_neighborhood_of(&self, row: usize, column: usize) -> Neighborhood {
+    pub fn make_graph(&mut self) {
+        let mut graph = BitGraph::with_capacity(self.dims.rows * self.dims.columns);
+
+        for _ in &self.cells {
+            graph.push_node(1);
+        }
+
+        for i in 0..self.cells.len() {
+            let square = &self.cells[i];
+            if square == &CellKind::Wall {
+                continue;
+            }
+            let row = i / self.dims.columns;
+            let col = i % self.dims.columns;
+
+            if square == &CellKind::Path || square == &CellKind::Explored {
+                self.set_cell(row, col, CellKind::Empty);
+            }
+
+            // get directions
+            if row > 0 && self.cells[i - self.dims.columns] != CellKind::Wall {
+                graph.add_edge(i, i - self.dims.columns);
+            }
+
+            if row < self.dims.rows - 1 && self.cells[i + self.dims.columns] != CellKind::Wall {
+                graph.add_edge(i, i + self.dims.columns);
+            }
+
+            if col > 0 && self.cells[i - 1] != CellKind::Wall {
+                graph.add_edge(i, i - 1);
+            }
+
+            if col < self.dims.columns - 1 && self.cells[i + 1] != CellKind::Wall {
+                graph.add_edge(i, i + 1);
+            }
+        }
+
+        self.graph = Some(Box::new(graph));
+        let graph = &**self.graph.as_ref().unwrap();
+        let root = self.start.unwrap();
+        let index = (self.dims.columns * root.0) + root.1;
+        let goal = match self.goal {
+            Some(inner) => inner,
+            None => {
+                if self.solver_kind == SolverKind::AStar {
+                    panic!("Astar requires a goal")
+                } else {
+                    (0, 0)
+                }
+            }
+        };
+        let goal_idx = (self.dims.columns * goal.0) + goal.1;
+        self.solver = Some(match self.solver_kind {
+            SolverKind::BFS => Box::new(BFS::new(graph, index)),
+            SolverKind::DFS => Box::new(DFS::new(graph, index)),
+            SolverKind::AStar => Box::new(AStarMH::new(graph, index, goal_idx, self.dims.columns)),
+        });
+    }
+}
+
+impl Grid for BlockGrid {
+    fn get_cell(&self, row: usize, column: usize) -> CellKind {
+        let word_row = self.dims.columns * row;
+        let word_col = column;
+
+        self.cells[word_row + word_col]
+    }
+
+    // returns coords of neighbor
+    fn set_neighbor_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: Direction,
+        kind: CellKind,
+    ) -> (usize, usize) {
+        let (n_row, n_col) = self.get_neighbor_coords_of(coords, direction);
+
+        self.set_cell(n_row, n_col, kind);
+
+        (n_row, n_col)
+    }
+
+    fn get_neighborhood_of(&self, row: usize, column: usize) -> Neighborhood {
         let mut neighbors = Neighborhood::new();
         let word_row = self.dims.columns * row;
         let word_col = column;
@@ -129,7 +251,7 @@ impl BlockGrid {
         neighbors
     }
 
-    pub fn set_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
+    fn set_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
         let prev_kind = self.cells[word_row + word_col];
@@ -137,64 +259,24 @@ impl BlockGrid {
 
         prev_kind
     }
-
-    pub fn unset_cell(&mut self, row: usize, column: usize) -> GridKind {
-        self.set_cell(row, column, GridKind::Empty)
-    }
-
-    pub fn clear(&mut self) {
-        self.cells = vec![GridKind::Empty; self.cells.len()];
+    fn clear(&mut self) {
+        self.cells = vec![CellKind::Empty; self.cells.len()];
         self.start = None;
         self.goal = None;
         self.cursor = None;
     }
 
-    pub fn fill(&mut self) {
-        self.cells = vec![GridKind::Wall; self.cells.len()];
+    fn fill(&mut self) {
+        self.cells = vec![CellKind::Wall; self.cells.len()];
         self.start = None;
         self.goal = None;
         self.cursor = None;
     }
-
-    pub fn toggle_cell(&mut self, row: usize, column: usize, kind: GridKind) -> GridKind {
-        let word_row = self.dims.columns * row;
-        let word_col = column;
-        let prev_kind = self.cells[word_row + word_col];
-
-        if prev_kind == GridKind::Empty {
-            self.cells[word_row + word_col] = kind;
-        } else if prev_kind != kind {
-            self.cells[word_row + word_col] = kind;
-        } else {
-            self.cells[word_row + word_col] = GridKind::Empty;
-        }
-
-        if kind == GridKind::Start {
-            if let Some(start) = self.start {
-                self.unset_cell(start.0, start.1);
-            }
-            if self.cells[word_row + word_col] == GridKind::Start {
-                self.start = Some((row, column));
-            }
-        }
-
-        if kind == GridKind::Goal {
-            if let Some(goal) = self.goal {
-                self.unset_cell(goal.0, goal.1);
-            }
-            if self.cells[word_row + word_col] == GridKind::Goal {
-                self.goal = Some((row, column));
-            }
-        }
-
-        prev_kind
-    }
-
-    pub fn handle_click(
+    fn handle_click(
         &mut self,
         pos: (f32, f32),
         size: winit::dpi::PhysicalSize<u32>,
-        kind: GridKind,
+        kind: CellKind,
     ) {
         let x = (2.0 * pos.0) - 1.0;
         let y = (2.0 * pos.1) - 1.0;
@@ -220,31 +302,7 @@ impl BlockGrid {
             self.toggle_cell(row, column, kind);
         }
     }
-
-    fn get_ndc_params(&self, size: winit::dpi::PhysicalSize<u32>) -> (f32, f32, f32, f32) {
-        let ratio = size.width as f32 / size.height as f32;
-        let (sq_width, sq_height) = if ratio >= 1.0 {
-            (
-                GRID_SCALE / self.dims.columns as f32 / ratio,
-                GRID_SCALE / self.dims.rows as f32,
-            )
-        } else {
-            (
-                GRID_SCALE / self.dims.columns as f32,
-                GRID_SCALE / self.dims.rows as f32 * ratio,
-            )
-        };
-
-        // centers the grid somehow, this will need some additional calculations to detect large
-        // gaps, but good enough for now to buy space
-        let bottom_left_x =
-            (2.0 - (GRID_SCALE + (self.dims.columns as f32 * SQUARE_GAP))) / 2.0 - 1.0;
-        let bottom_left_y = (2.0 - (GRID_SCALE + (self.dims.rows as f32 * SQUARE_GAP))) / 2.0 - 1.0;
-
-        (sq_width, sq_height, bottom_left_x, bottom_left_y)
-    }
-
-    pub fn render(&self, state: &State) -> Vec<Vertex> {
+    fn render(&self, state: &State) -> Vec<Vertex> {
         let mut grid = Vec::new();
         let (sq_width, sq_height, center_x, center_y) = self.get_ndc_params(state.gfx_ctx.size);
 
@@ -303,79 +361,20 @@ impl BlockGrid {
         grid
     }
 
-    pub fn make_graph(&mut self) {
-        let mut graph = BitGraph::with_capacity(self.dims.rows * self.dims.columns);
-
-        for _ in &self.cells {
-            graph.push_node(1);
-        }
-
-        for i in 0..self.cells.len() {
-            let square = &self.cells[i];
-            if square == &GridKind::Wall {
-                continue;
-            }
-            let row = i / self.dims.columns;
-            let col = i % self.dims.columns;
-
-            if square == &GridKind::Path || square == &GridKind::Explored {
-                self.set_cell(row, col, GridKind::Empty);
-            }
-
-            // get directions
-            if row > 0 && self.cells[i - self.dims.columns] != GridKind::Wall {
-                graph.add_edge(i, i - self.dims.columns);
-            }
-
-            if row < self.dims.rows - 1 && self.cells[i + self.dims.columns] != GridKind::Wall {
-                graph.add_edge(i, i + self.dims.columns);
-            }
-
-            if col > 0 && self.cells[i - 1] != GridKind::Wall {
-                graph.add_edge(i, i - 1);
-            }
-
-            if col < self.dims.columns - 1 && self.cells[i + 1] != GridKind::Wall {
-                graph.add_edge(i, i + 1);
-            }
-        }
-
-        self.graph = Some(Box::new(graph));
-        let graph = &**self.graph.as_ref().unwrap();
-        let root = self.start.unwrap();
-        let index = (self.dims.columns * root.0) + root.1;
-        let goal = match self.goal {
-            Some(inner) => inner,
-            None => {
-                if self.solver_kind == SolverKind::AStar {
-                    panic!("Astar requires a goal")
-                } else {
-                    (0, 0)
-                }
-            }
-        };
-        let goal_idx = (self.dims.columns * goal.0) + goal.1;
-        self.solver = Some(match self.solver_kind {
-            SolverKind::BFS => Box::new(BFS::new(graph, index)),
-            SolverKind::DFS => Box::new(DFS::new(graph, index)),
-            SolverKind::AStar => Box::new(AStarMH::new(graph, index, goal_idx, self.dims.columns)),
-        });
-    }
-
-    pub fn step_solve_path(&mut self) -> bool {
+    fn step_solve_path(&mut self) -> bool {
         if self.start.is_none() || self.goal.is_none() {
             return false;
         }
 
         let start = self.start.unwrap();
         let goal = self.goal.unwrap();
-        self.set_cell(start.0, start.1, GridKind::Start);
-        self.set_cell(goal.0, goal.1, GridKind::Goal);
+        self.set_cell(start.0, start.1, CellKind::Start);
+        self.set_cell(goal.0, goal.1, CellKind::Goal);
 
         let mut index = 0;
         loop {
-            if self.cells[index] == GridKind::Cursor {
-                self.cells[index] = GridKind::Explored;
+            if self.cells[index] == CellKind::Cursor {
+                self.cells[index] = CellKind::Explored;
                 break;
             }
             index += 1;
@@ -405,7 +404,7 @@ impl BlockGrid {
 
             self.cursor = Some((row, col));
 
-            (row, col, GridKind::Path)
+            (row, col, CellKind::Path)
         } else {
             let (row, col, kind) = if let Some((idx, _from)) = solver.next(graph) {
                 let row = idx / self.dims.columns;
@@ -416,7 +415,7 @@ impl BlockGrid {
                     self.cursor = Some((row, col));
                 }
 
-                (row, col, GridKind::Cursor)
+                (row, col, CellKind::Cursor)
             } else {
                 return false;
             };
@@ -429,7 +428,7 @@ impl BlockGrid {
         true
     }
 
-    pub fn solve_path(&mut self) {
+    fn solve_path(&mut self) {
         if self.start.is_none() || self.goal.is_none() {
             return;
         }
@@ -452,7 +451,7 @@ impl BlockGrid {
                 let row = path[i] / self.dims.columns;
                 let col = path[i] % self.dims.columns;
 
-                self.set_cell(row, col, GridKind::Path);
+                self.set_cell(row, col, CellKind::Path);
             }
         } else {
             println!("path not found");
@@ -460,6 +459,18 @@ impl BlockGrid {
 
         // clear graph for reasons
         self.graph = None;
+    }
+
+    fn cells(&self) -> &Vec<CellKind> {
+        &self.cells
+    }
+
+    fn set_cells(&mut self, cells: Vec<CellKind>) {
+        self.cells = cells;
+    }
+
+    fn set_solver_kind(&mut self, kind: SolverKind) {
+        self.solver_kind = kind;
     }
 }
 
@@ -471,22 +482,22 @@ mod test_grid {
     fn it_works() {
         let mut grid = BlockGrid::with_dims(200, 400);
 
-        grid.set_cell(1, 2, GridKind::Wall);
-        grid.set_cell(0, 0, GridKind::Wall);
-        grid.set_cell(4, 4, GridKind::Wall);
-        grid.set_cell(3, 2, GridKind::Wall);
-        grid.set_cell(1, 1, GridKind::Wall);
+        grid.set_cell(1, 2, CellKind::Wall);
+        grid.set_cell(0, 0, CellKind::Wall);
+        grid.set_cell(4, 4, CellKind::Wall);
+        grid.set_cell(3, 2, CellKind::Wall);
+        grid.set_cell(1, 1, CellKind::Wall);
 
         assert!(grid.is_set(0, 0));
         assert!(!grid.is_set(0, 1));
 
-        assert!(grid.unset_cell(0, 0) == GridKind::Wall);
+        assert!(grid.unset_cell(0, 0) == CellKind::Wall);
         assert!(!grid.is_set(0, 0));
 
-        assert!(!(grid.toggle_cell(14, 1, GridKind::Wall) == GridKind::Wall));
+        assert!(!(grid.toggle_cell(14, 1, CellKind::Wall) == CellKind::Wall));
         assert!(grid.is_set(14, 1));
 
-        assert!(!(grid.toggle_cell(100, 300, GridKind::Wall) == GridKind::Wall));
+        assert!(!(grid.toggle_cell(100, 300, CellKind::Wall) == CellKind::Wall));
         assert!(grid.is_set(100, 300));
     }
 }
