@@ -4,11 +4,13 @@ pub mod block_grid;
 #[allow(dead_code)]
 pub mod wall_grid;
 
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
 pub enum GridKind {
     Block,
     Wall,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Dimensions {
     pub rows: usize,
     pub columns: usize,
@@ -168,11 +170,14 @@ pub enum SolverKind {
 
 pub trait Grid {
     fn render(&self, state: &crate::State) -> Vec<crate::renderer::Vertex>;
+    fn dims(&self) -> Dimensions;
     fn cells(&self) -> &Vec<CellKind>;
     fn set_cells(&mut self, cells: Vec<CellKind>);
+    fn solver_kind(&self) -> SolverKind;
     fn set_solver_kind(&mut self, kind: SolverKind);
     fn solve_path(&mut self);
     fn step_solve_path(&mut self) -> bool;
+    fn reset_solver(&mut self);
     fn clear(&mut self);
     fn fill(&mut self);
     fn handle_click(

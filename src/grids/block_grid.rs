@@ -6,7 +6,7 @@ pub const SQUARE_GAP: f32 = 0.005;
 use crate::renderer::Vertex;
 use crate::State;
 
-use crate::grids::{Dimensions, Direction, Grid, CellKind, Neighborhood, SolverKind};
+use crate::grids::{CellKind, Dimensions, Direction, Grid, Neighborhood, SolverKind};
 use bit_graph::search::a_star::AStarMH;
 use bit_graph::search::bfs::BFS;
 use bit_graph::search::dfs::DFS;
@@ -197,6 +197,10 @@ impl BlockGrid {
 }
 
 impl Grid for BlockGrid {
+    fn dims(&self) -> Dimensions {
+        self.dims
+    }
+
     fn get_cell(&self, row: usize, column: usize) -> CellKind {
         let word_row = self.dims.columns * row;
         let word_col = column;
@@ -469,8 +473,16 @@ impl Grid for BlockGrid {
         self.cells = cells;
     }
 
+    fn solver_kind(&self) -> SolverKind {
+        self.solver_kind
+    }
+
     fn set_solver_kind(&mut self, kind: SolverKind) {
         self.solver_kind = kind;
+    }
+
+    fn reset_solver(&mut self) {
+        self.graph = None;
     }
 }
 

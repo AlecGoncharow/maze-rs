@@ -1,6 +1,6 @@
 const DEFAULT_DIMS: (usize, usize) = (15, 15);
 
-use crate::grids::{Dimensions, Grid, CellKind};
+use crate::grids::{CellKind, Dimensions, Direction, Grid, Neighborhood, SolverKind};
 use bit_graph::{BitGraph, Graph};
 pub const GRID_SCALE: f32 = 1.3;
 pub const SQUARE_GAP: f32 = 0.005;
@@ -20,6 +20,7 @@ pub struct WallGrid {
     pub start: Option<(usize, usize)>,
     pub goal: Option<(usize, usize)>,
     pub cursor: Option<(usize, usize)>,
+    pub solver_kind: SolverKind,
 }
 
 impl WallGrid {
@@ -35,6 +36,7 @@ impl WallGrid {
             start: None,
             goal: None,
             cursor: None,
+            solver_kind: SolverKind::BFS,
         }
     }
 
@@ -54,6 +56,26 @@ impl WallGrid {
         // graph is directed and im lazy to make undirected
         self.graph.add_edge(index_one, index_two);
         self.graph.add_edge(index_two, index_one);
+    }
+
+    // returns coords of neighbor
+    fn get_neighbor_coords_of(
+        &mut self,
+        coords: (usize, usize),
+        direction: Direction,
+    ) -> (usize, usize) {
+        let row = coords.0;
+        let column = coords.1;
+
+        let (n_row, n_col) = match direction {
+            Direction::North => (row + 1, column),
+            Direction::South => (row - 1, column),
+            Direction::East => (row, column + 1),
+            Direction::West => (row, column - 1),
+            Direction::Sentinel => panic!("no"),
+        };
+
+        (n_row, n_col)
     }
 
     pub fn toggle_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind {
@@ -314,15 +336,15 @@ impl Grid for WallGrid {
     }
 
     fn cells(&self) -> &Vec<CellKind> {
-        todo!()
+        &self.cells
     }
 
     fn set_cells(&mut self, cells: Vec<CellKind>) {
-        todo!()
+        self.cells = cells;
     }
 
     fn set_solver_kind(&mut self, kind: super::SolverKind) {
-        todo!()
+        self.solver_kind = kind;
     }
 
     fn solve_path(&mut self) {
@@ -334,7 +356,10 @@ impl Grid for WallGrid {
     }
 
     fn clear(&mut self) {
-        todo!()
+        self.cells = vec![CellKind::Empty; self.cells.len()];
+        self.start = None;
+        self.goal = None;
+        self.cursor = None;
     }
 
     fn fill(&mut self) {
@@ -342,7 +367,36 @@ impl Grid for WallGrid {
     }
 
     fn get_neighborhood_of(&self, row: usize, column: usize) -> super::Neighborhood {
-        todo!()
+        let mut neighbors = Neighborhood::new();
+        let word_row = self.dims.columns * row;
+        let word_col = column;
+        let index = word_row + word_col;
+
+        neighbors.north = if let Some(kind) = self.cells.get(index + self.dims.columns) {
+            Some((*kind, (row + 1, column)))
+        } else {
+            None
+        };
+
+        neighbors.south = if index >= self.dims.columns {
+            Some((self.cells[index - self.dims.columns], (row - 1, column)))
+        } else {
+            None
+        };
+
+        neighbors.east = if column < self.dims.columns - 1 {
+            Some((self.cells[index + 1], (row, column + 1)))
+        } else {
+            None
+        };
+
+        neighbors.west = if column > 0 {
+            Some((self.cells[index - 1], (row, column - 1)))
+        } else {
+            None
+        };
+
+        neighbors
     }
 
     fn set_neighbor_of(
@@ -351,6 +405,22 @@ impl Grid for WallGrid {
         direction: super::Direction,
         kind: CellKind,
     ) -> (usize, usize) {
+        let (n_row, n_col) = self.get_neighbor_coords_of(coords, direction);
+
+        self.set_cell(n_row, n_col, kind);
+
+        (n_row, n_col)
+    }
+
+    fn dims(&self) -> Dimensions {
+        self.dims
+    }
+
+    fn solver_kind(&self) -> SolverKind {
+        self.solver_kind
+    }
+
+    fn reset_solver(&mut self) {
         todo!()
     }
 }

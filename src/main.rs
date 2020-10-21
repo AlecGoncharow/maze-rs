@@ -22,12 +22,12 @@ mod generators;
 use generators::aldous_broder::AldousBroder;
 use generators::prim::RandPrims;
 use generators::{Generator, GeneratorKind};
-use grids::{Grid, CellKind, SolverKind};
+use grids::{CellKind, Grid, GridKind, SolverKind};
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
-    pub grid: BlockGrid,
-    pub wall_grid: WallGrid,
+    pub grid: Box<dyn Grid>,
+    pub grid_kind: GridKind,
     pub generator_kind: GeneratorKind,
     pub maze_generator: Box<dyn Generator>,
 
@@ -59,8 +59,6 @@ impl State {
                 if state == &ElementState::Pressed {
                     self.grid
                         .handle_click((self.last_x, self.last_y), self.gfx_ctx.size, kind);
-                    self.wall_grid
-                        .handle_click((self.last_x, self.last_y), self.gfx_ctx.size, kind)
                 }
                 true
             }
@@ -75,8 +73,8 @@ impl State {
 
         let rows = self.rows as usize;
         let cols = self.cols as usize;
-        if rows != self.grid.dims.rows || cols != self.grid.dims.columns {
-            self.grid = BlockGrid::with_dims(rows, cols);
+        if rows != self.grid.dims().rows || cols != self.grid.dims().columns {
+            self.grid = new_grid(self.grid_kind, (rows, cols));
             self.maze_generator = new_generator(self.generator_kind, self);
         }
     }
@@ -84,8 +82,7 @@ impl State {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.gfx_ctx.start(view, device, queue);
 
-        //let verts = self.grid.render(self);
-        let verts = self.wall_grid.render(self);
+        let verts = self.grid.render(self);
 
         self.gfx_ctx.draw(&verts, view, device);
 
@@ -96,14 +93,20 @@ impl State {
 fn new_generator(generator_kind: GeneratorKind, state: &State) -> Box<dyn Generator> {
     match generator_kind {
         GeneratorKind::AldousBroder => Box::new(AldousBroder::new(
-            state.grid.dims.rows,
-            state.grid.dims.columns,
+            state.grid.dims().rows,
+            state.grid.dims().columns,
         )),
 
         GeneratorKind::RandPrims => Box::new(RandPrims::new(
-            state.grid.dims.rows,
-            state.grid.dims.columns,
+            state.grid.dims().rows,
+            state.grid.dims().columns,
         )),
+    }
+}
+fn new_grid(grid_kind: GridKind, dims: (usize, usize)) -> Box<dyn Grid> {
+    match grid_kind {
+        GridKind::Block => Box::new(BlockGrid::with_dims(dims.0, dims.1)),
+        GridKind::Wall => Box::new(WallGrid::with_dims(dims.0, dims.1)),
     }
 }
 
@@ -113,8 +116,8 @@ fn main() {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let hidpi_factor = window.scale_factor();
     // Since main can't be async, we're going to need to block
-    let grid = BlockGrid::with_dims(103, 103);
-    let wall_grid = WallGrid::with_dims(17, 17);
+    let grid_kind = GridKind::Block;
+    let grid = new_grid(GridKind::Block, (17, 17));
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -180,16 +183,16 @@ fn main() {
         imgui_wgpu::Renderer::new_glsl(&mut imgui, &device, &mut queue, sc_desc.format);
 
     let generator_kind = GeneratorKind::RandPrims;
-    let maze_generator = Box::new(RandPrims::new(grid.dims.rows, grid.dims.columns));
+    let maze_generator = Box::new(RandPrims::new(grid.dims().rows, grid.dims().columns));
 
     let mut state = State {
         gfx_ctx,
-        rows: grid.dims.rows as u16,
-        cols: grid.dims.columns as u16,
+        rows: grid.dims().rows as u16,
+        cols: grid.dims().columns as u16,
         generator_kind,
         maze_generator,
         grid,
-        wall_grid,
+        grid_kind,
         last_x: 0.0,
         last_y: 0.0,
     };
@@ -256,6 +259,29 @@ fn main() {
                             if ui.button(im_str!("Toggle Demo"), [100., 20.]) {
                                 show_demo = !show_demo
                             }
+
+                            ui.separator();
+
+                            if ui.radio_button(
+                                im_str!("Block Grid"),
+                                &mut state.grid_kind,
+                                GridKind::Block,
+                            ) {
+                                state.grid_kind = GridKind::Block;
+                                let dims = state.grid.dims();
+                                state.grid = new_grid(state.grid_kind, (dims.rows, dims.columns));
+                            }
+                            ui.same_line(150.);
+                            if ui.radio_button(
+                                im_str!("Wall Grid"),
+                                &mut state.grid_kind,
+                                GridKind::Wall,
+                            ) {
+                                state.grid_kind = GridKind::Wall;
+                                let dims = state.grid.dims();
+                                state.grid = new_grid(state.grid_kind, (dims.rows, dims.columns));
+                            }
+
                             ui.separator();
 
                             imgui::Slider::new(im_str!("rows"))
@@ -311,7 +337,7 @@ fn main() {
                             if ui.button(im_str!("Generate Maze"), [250., 20.]) {
                                 state.maze_generator = new_generator(state.generator_kind, &state);
                                 let squares = state.maze_generator.generate_maze();
-                                state.grid.cells = squares;
+                                state.grid.set_cells(squares);
                             }
                             ui.separator();
                             if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
@@ -324,33 +350,33 @@ fn main() {
                             ui.same_line(150.);
                             if ui.button(im_str!("Step Maze"), [125., 20.]) {
                                 let squares = state.maze_generator.next_step();
-                                state.grid.cells = squares;
+                                state.grid.set_cells(squares);
                             }
 
                             ui.separator();
 
                             if ui.radio_button(
                                 im_str!("BFS"),
-                                &mut state.grid.solver_kind,
+                                &mut state.grid.solver_kind(),
                                 SolverKind::BFS,
                             ) {
-                                state.grid.solver_kind = SolverKind::BFS;
+                                state.grid.set_solver_kind(SolverKind::BFS);
                             }
                             ui.same_line(100.);
                             if ui.radio_button(
                                 im_str!("DFS"),
-                                &mut state.grid.solver_kind,
+                                &mut state.grid.solver_kind(),
                                 SolverKind::DFS,
                             ) {
-                                state.grid.solver_kind = SolverKind::DFS;
+                                state.grid.set_solver_kind(SolverKind::DFS);
                             }
                             ui.same_line(200.);
                             if ui.radio_button(
                                 im_str!("A Star"),
-                                &mut state.grid.solver_kind,
+                                &mut state.grid.solver_kind(),
                                 SolverKind::AStar,
                             ) {
-                                state.grid.solver_kind = SolverKind::AStar;
+                                state.grid.set_solver_kind(SolverKind::AStar);
                             }
 
                             ui.separator();
@@ -360,7 +386,7 @@ fn main() {
                             }
                             ui.separator();
                             if ui.button(im_str!("Expanded Solve"), [125., 20.]) {
-                                state.grid.graph = None;
+                                state.grid.reset_solver();
                                 expanded_solve_running = !expanded_solve_running;
                             }
                             ui.same_line(150.);
@@ -379,7 +405,7 @@ fn main() {
                 }
 
                 if expanded_gen_running {
-                    state.grid.cells = state.maze_generator.next_step();
+                    state.grid.set_cells(state.maze_generator.next_step());
                     expanded_gen_running = !state.maze_generator.is_done();
                 }
 
