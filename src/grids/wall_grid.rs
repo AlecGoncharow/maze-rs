@@ -1,6 +1,10 @@
 const DEFAULT_DIMS: (usize, usize) = (15, 15);
 
 use crate::grids::{CellKind, Dimensions, Direction, Grid, Neighborhood, SolverKind};
+use bit_graph::search::a_star::AStarMH;
+use bit_graph::search::bfs::BFS;
+use bit_graph::search::dfs::DFS;
+use bit_graph::search::Pathfinder;
 use bit_graph::{BitGraph, Graph};
 pub const GRID_SCALE: f32 = 1.3;
 pub const SQUARE_GAP: f32 = 0.005;
@@ -20,6 +24,7 @@ pub struct WallGrid {
     pub start: Option<(usize, usize)>,
     pub goal: Option<(usize, usize)>,
     pub cursor: Option<(usize, usize)>,
+    pub solver: Option<Box<dyn Pathfinder<u64, bool>>>,
     pub solver_kind: SolverKind,
 }
 
@@ -29,33 +34,18 @@ impl WallGrid {
     }
 
     pub fn with_dims(rows: usize, columns: usize) -> Self {
+        let mut graph = Box::new(BitGraph::with_capacity(rows * columns));
+        graph.set_count(rows * columns);
         Self {
             cells: vec![CellKind::Empty; rows * columns],
             dims: Dimensions { rows, columns },
-            graph: Box::new(BitGraph::with_capacity(rows * columns)),
+            graph,
             start: None,
             goal: None,
             cursor: None,
+            solver: None,
             solver_kind: SolverKind::BFS,
         }
-    }
-
-    pub fn clear_wall_between(&mut self, one: (usize, usize), two: (usize, usize)) {
-        let index_one = self.index_of(one.0, one.1);
-        let index_two = self.index_of(two.0, two.1);
-
-        // graph is directed and im lazy to make undirected
-        self.graph.remove_edge(index_one, index_two);
-        self.graph.remove_edge(index_two, index_one);
-    }
-
-    pub fn add_wall_between(&mut self, one: (usize, usize), two: (usize, usize)) {
-        let index_one = self.index_of(one.0, one.1);
-        let index_two = self.index_of(two.0, two.1);
-
-        // graph is directed and im lazy to make undirected
-        self.graph.add_edge(index_one, index_two);
-        self.graph.add_edge(index_two, index_one);
     }
 
     // returns coords of neighbor
@@ -159,6 +149,24 @@ impl Grid for WallGrid {
         prev_kind
     }
 
+    fn clear_wall_between(&mut self, one: (usize, usize), two: (usize, usize)) {
+        let index_one = self.index_of(one.0, one.1);
+        let index_two = self.index_of(two.0, two.1);
+
+        // graph is directed and im lazy to make undirected
+        self.graph.add_edge(index_one, index_two);
+        self.graph.add_edge(index_two, index_one);
+    }
+
+    fn add_wall_between(&mut self, one: (usize, usize), two: (usize, usize)) {
+        let index_one = self.index_of(one.0, one.1);
+        let index_two = self.index_of(two.0, two.1);
+
+        // graph is directed and im lazy to make undirected
+        self.graph.remove_edge(index_one, index_two);
+        self.graph.remove_edge(index_two, index_one);
+    }
+
     fn handle_click(
         &mut self,
         pos: (f32, f32),
@@ -244,13 +252,13 @@ impl Grid for WallGrid {
                 if col != self.dims.columns - 1 {
                     let index = (row * self.dims.columns) + col;
                     let color: [f32; 4] = if self.graph.has_edge(index, index + 1) {
-                        [1.0, 1.0, 1.0, 1.0]
+                        color
                     } else {
                         [0.0, 0.0, 0.0, 1.0]
                     };
                     let low_x = low_x + sq_width;
                     let up_x = low_x + SQUARE_GAP;
-                    let up_y = up_y + SQUARE_GAP;
+                    //let up_y = up_y + SQUARE_GAP;
 
                     let verts: &[Vertex] = &[
                         // lower left triangle
@@ -288,11 +296,11 @@ impl Grid for WallGrid {
                     let index = (row * self.dims.columns) + col;
 
                     let color: [f32; 4] = if self.graph.has_edge(index, index + self.dims.columns) {
-                        [1.0, 1.0, 1.0, 1.0]
+                        color
                     } else {
                         [0.0, 0.0, 0.0, 1.0]
                     };
-                    let up_x = low_x + SQUARE_GAP + sq_width;
+                    let up_x = low_x + sq_width; // + SQUARE_GAP
                     let low_y = up_y;
                     let up_y = low_y + SQUARE_GAP;
 
@@ -348,11 +356,90 @@ impl Grid for WallGrid {
     }
 
     fn solve_path(&mut self) {
-        todo!()
+        let start = self.start.unwrap();
+        let goal = self.goal.unwrap();
+        let root_idx = (start.0 * self.dims.columns) + start.1;
+        let goal_idx = (goal.0 * self.dims.columns) + goal.1;
+        println!("start: {}, goal: {}", root_idx, goal_idx);
+        let graph = &*self.graph;
+        let mut solver = self.solver.take().unwrap();
+
+        if let Some(path) = solver.path_to(graph, goal_idx) {
+            // pop off root
+            println!("Path found: {:?}", path);
+
+            for i in 1..path.len() - 1 {
+                let row = path[i] / self.dims.columns;
+                let col = path[i] % self.dims.columns;
+
+                self.set_cell(row, col, CellKind::Path);
+            }
+        } else {
+            println!("path not found");
+        }
     }
 
     fn step_solve_path(&mut self) -> bool {
-        todo!()
+        if self.start.is_none() || self.goal.is_none() {
+            return false;
+        }
+
+        let start = self.start.unwrap();
+        let goal = self.goal.unwrap();
+        self.set_cell(start.0, start.1, CellKind::Start);
+        self.set_cell(goal.0, goal.1, CellKind::Goal);
+
+        let mut index = 0;
+        loop {
+            if self.cells[index] == CellKind::Cursor {
+                self.cells[index] = CellKind::Explored;
+                break;
+            }
+            index += 1;
+
+            if index >= self.cells.len() {
+                break;
+            }
+        }
+
+        let solver = self.solver.as_mut().unwrap();
+        let graph = &*self.graph;
+
+        let (row, col, kind) = if solver.is_solved() {
+            let cursor = self.cursor.unwrap();
+            let idx = (cursor.0 * self.dims.columns) + cursor.1;
+            let from = solver.from_index_of(idx);
+            let row = from / self.dims.columns;
+            let col = from % self.dims.columns;
+
+            if row == start.0 && col == start.1 {
+                return false;
+            }
+
+            self.cursor = Some((row, col));
+
+            (row, col, CellKind::Path)
+        } else {
+            let (row, col, kind) = if let Some((idx, _from)) = solver.next(graph) {
+                let row = idx / self.dims.columns;
+                let col = idx % self.dims.columns;
+
+                if row == goal.0 && col == goal.1 {
+                    solver.set_solved();
+                    self.cursor = Some((row, col));
+                }
+
+                (row, col, CellKind::Cursor)
+            } else {
+                return false;
+            };
+
+            (row, col, kind)
+        };
+        drop(solver);
+
+        self.set_cell(row, col, kind);
+        true
     }
 
     fn clear(&mut self) {
@@ -363,7 +450,8 @@ impl Grid for WallGrid {
     }
 
     fn fill(&mut self) {
-        todo!()
+        self.graph = Box::new(BitGraph::with_capacity(self.dims.rows * self.dims.columns));
+        self.graph.set_count(self.dims.rows * self.dims.columns);
     }
 
     fn get_neighborhood_of(&self, row: usize, column: usize) -> super::Neighborhood {
@@ -421,6 +509,41 @@ impl Grid for WallGrid {
     }
 
     fn reset_solver(&mut self) {
-        todo!()
+        self.cells.iter_mut().for_each(|cell| {
+            if *cell == CellKind::Explored || *cell == CellKind::Cursor {
+                *cell = CellKind::Empty;
+            }
+        });
+        let graph = &*self.graph;
+        let root = self.start.unwrap();
+        let index = (self.dims.columns * root.0) + root.1;
+        let goal = match self.goal {
+            Some(inner) => inner,
+            None => {
+                if self.solver_kind == SolverKind::AStar {
+                    panic!("Astar requires a goal")
+                } else {
+                    (0, 0)
+                }
+            }
+        };
+        let goal_idx = (self.dims.columns * goal.0) + goal.1;
+        self.solver = Some(match self.solver_kind {
+            SolverKind::BFS => Box::new(BFS::new(graph, index)),
+            SolverKind::DFS => Box::new(DFS::new(graph, index)),
+            SolverKind::AStar => Box::new(AStarMH::new(graph, index, goal_idx, self.dims.columns)),
+        });
+    }
+
+    fn paths(&self) -> Vec<(usize, usize)> {
+        self.graph.all_edge_pairs()
+    }
+
+    fn set_paths(&mut self, paths: Vec<(usize, usize)>) {
+        self.fill();
+
+        paths.iter().for_each(|(from, to)| {
+            self.graph.add_edge(*from, *to);
+        });
     }
 }

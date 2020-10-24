@@ -1,12 +1,12 @@
 pub mod aldous_broder;
 pub mod division;
 pub mod prim;
-use crate::grids::CellKind;
+use crate::grids::Grid;
 
 pub trait Generator {
     fn step_generation(&mut self);
-    fn next_step(&mut self) -> Vec<CellKind>;
-    fn generate_maze(&mut self) -> Vec<CellKind>;
+    fn next_step(&mut self) -> &dyn Grid;
+    fn generate_maze(&mut self) -> &dyn Grid;
     fn is_done(&self) -> bool;
 }
 
@@ -15,4 +15,3 @@ pub enum GeneratorKind {
     AldousBroder,
     RandPrims,
 }
-

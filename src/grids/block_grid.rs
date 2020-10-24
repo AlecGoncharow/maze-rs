@@ -484,6 +484,22 @@ impl Grid for BlockGrid {
     fn reset_solver(&mut self) {
         self.graph = None;
     }
+
+    fn add_wall_between(&mut self, _one: (usize, usize), _two: (usize, usize)) {
+        todo!()
+    }
+
+    fn clear_wall_between(&mut self, _one: (usize, usize), _two: (usize, usize)) {
+        todo!()
+    }
+
+    fn paths(&self) -> Vec<(usize, usize)> {
+        todo!()
+    }
+
+    fn set_paths(&mut self, _paths: Vec<(usize, usize)>) {
+        todo!()
+    }
 }
 
 #[cfg(test)]

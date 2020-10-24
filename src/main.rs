@@ -95,11 +95,13 @@ fn new_generator(generator_kind: GeneratorKind, state: &State) -> Box<dyn Genera
         GeneratorKind::AldousBroder => Box::new(AldousBroder::new(
             state.grid.dims().rows,
             state.grid.dims().columns,
+            state.grid_kind,
         )),
 
         GeneratorKind::RandPrims => Box::new(RandPrims::new(
             state.grid.dims().rows,
             state.grid.dims().columns,
+            state.grid_kind,
         )),
     }
 }
@@ -116,8 +118,8 @@ fn main() {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let hidpi_factor = window.scale_factor();
     // Since main can't be async, we're going to need to block
-    let grid_kind = GridKind::Block;
-    let grid = new_grid(GridKind::Block, (17, 17));
+    let grid_kind = GridKind::Wall;
+    let grid = new_grid(grid_kind, (17, 17));
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -183,7 +185,11 @@ fn main() {
         imgui_wgpu::Renderer::new_glsl(&mut imgui, &device, &mut queue, sc_desc.format);
 
     let generator_kind = GeneratorKind::RandPrims;
-    let maze_generator = Box::new(RandPrims::new(grid.dims().rows, grid.dims().columns));
+    let maze_generator = Box::new(RandPrims::new(
+        grid.dims().rows,
+        grid.dims().columns,
+        grid_kind,
+    ));
 
     let mut state = State {
         gfx_ctx,
@@ -200,7 +206,7 @@ fn main() {
     let mut last_frame = std::time::Instant::now();
     let mut last_cursor = None;
     let mut show_demo = false;
-    let mut grid_kind = CellKind::Wall;
+    let mut grid_kind = CellKind::Start;
     let mut expanded_solve_running = false;
     let mut expanded_gen_running = false;
 
@@ -244,7 +250,7 @@ fn main() {
                 {
                     let window = imgui::Window::new(im_str!("Maze Controls"));
                     window
-                        .size([300.0, 300.0], imgui::Condition::FirstUseEver)
+                        .size([300.0, 400.0], imgui::Condition::FirstUseEver)
                         .build(&ui, || {
                             ui.text(im_str!("Frametime: {:?}", delta_s));
                             ui.separator();
@@ -270,6 +276,7 @@ fn main() {
                                 state.grid_kind = GridKind::Block;
                                 let dims = state.grid.dims();
                                 state.grid = new_grid(state.grid_kind, (dims.rows, dims.columns));
+                                state.maze_generator = new_generator(state.generator_kind, &state);
                             }
                             ui.same_line(150.);
                             if ui.radio_button(
@@ -280,6 +287,7 @@ fn main() {
                                 state.grid_kind = GridKind::Wall;
                                 let dims = state.grid.dims();
                                 state.grid = new_grid(state.grid_kind, (dims.rows, dims.columns));
+                                state.maze_generator = new_generator(state.generator_kind, &state);
                             }
 
                             ui.separator();
@@ -294,17 +302,19 @@ fn main() {
 
                             ui.separator();
 
-                            if ui.radio_button(im_str!("Wall"), &mut grid_kind, CellKind::Wall) {
-                                grid_kind = CellKind::Wall;
-                            }
-                            ui.same_line(100.);
                             if ui.radio_button(im_str!("Start"), &mut grid_kind, CellKind::Start) {
                                 grid_kind = CellKind::Start;
                             }
-                            ui.same_line(200.);
+                            ui.same_line(100.);
                             if ui.radio_button(im_str!("Goal"), &mut grid_kind, CellKind::Goal) {
                                 grid_kind = CellKind::Goal;
                             }
+                            ui.same_line(200.);
+
+                            if ui.radio_button(im_str!("Wall"), &mut grid_kind, CellKind::Wall) {
+                                grid_kind = CellKind::Wall;
+                            }
+
                             ui.separator();
                             if ui.button(im_str!("Clear Grid"), [125., 20.]) {
                                 state.grid.clear();
@@ -336,8 +346,12 @@ fn main() {
                             ui.separator();
                             if ui.button(im_str!("Generate Maze"), [250., 20.]) {
                                 state.maze_generator = new_generator(state.generator_kind, &state);
-                                let squares = state.maze_generator.generate_maze();
-                                state.grid.set_cells(squares);
+                                let gen_grid = state.maze_generator.generate_maze();
+                                state.grid.set_cells(gen_grid.cells().clone());
+                                match state.grid_kind {
+                                    GridKind::Block => {}
+                                    GridKind::Wall => state.grid.set_paths(gen_grid.paths()),
+                                }
                             }
                             ui.separator();
                             if ui.button(im_str!("Expanded Generate"), [125., 20.]) {
@@ -349,8 +363,8 @@ fn main() {
                             }
                             ui.same_line(150.);
                             if ui.button(im_str!("Step Maze"), [125., 20.]) {
-                                let squares = state.maze_generator.next_step();
-                                state.grid.set_cells(squares);
+                                let gen_grid = state.maze_generator.next_step();
+                                state.grid.set_cells(gen_grid.cells().clone());
                             }
 
                             ui.separator();
@@ -382,6 +396,7 @@ fn main() {
                             ui.separator();
 
                             if ui.button(im_str!("Solve!"), [250., 20.]) {
+                                state.grid.reset_solver();
                                 state.grid.solve_path();
                             }
                             ui.separator();
@@ -405,7 +420,12 @@ fn main() {
                 }
 
                 if expanded_gen_running {
-                    state.grid.set_cells(state.maze_generator.next_step());
+                    let gen_grid = state.maze_generator.next_step();
+                    state.grid.set_cells(gen_grid.cells().clone());
+                    match state.grid_kind {
+                        GridKind::Block => (),
+                        GridKind::Wall => state.grid.set_paths(gen_grid.paths()),
+                    }
                     expanded_gen_running = !state.maze_generator.is_done();
                 }
 

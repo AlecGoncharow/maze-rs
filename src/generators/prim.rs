@@ -1,10 +1,12 @@
 use crate::grids::block_grid::BlockGrid;
+use crate::grids::wall_grid::WallGrid;
 use crate::generators::Generator;
 use rand::prelude::*;
-use crate::grids::{CellKind, Grid};
+use crate::grids::{CellKind, Grid, GridKind};
 
 pub struct RandPrims {
-    grid: BlockGrid,
+    grid: Box<dyn Grid>,
+    grid_kind: GridKind,
     walls: Vec<(usize, usize)>,
     rng: ThreadRng,
     last_passage: (usize, usize),
@@ -12,8 +14,11 @@ pub struct RandPrims {
 }
 
 impl RandPrims {
-    pub fn new(rows: usize, cols: usize) -> Self {
-        let mut grid = BlockGrid::with_dims(rows, cols);
+    pub fn new(rows: usize, cols: usize, kind: GridKind) -> Self {
+        let mut grid: Box<dyn Grid> = match kind {
+            GridKind::Block => Box::new(BlockGrid::with_dims(rows, cols)),
+            GridKind::Wall => Box::new(WallGrid::with_dims(rows, cols)),
+        };
         grid.fill();
         let mut rng = rand::thread_rng();
         // make it odd
@@ -23,6 +28,7 @@ impl RandPrims {
         let last_passage = (row, col);
         Self {
             grid,
+            grid_kind: kind,
             walls,
             last_passage,
             rng,
@@ -66,7 +72,7 @@ impl Generator for RandPrims {
                 for (neighbor, _) in self.grid.get_neighborhood_of(self.last_passage.0, self.last_passage.1) {
 
                     if neighbor.0 == CellKind::Wall {
-                        if neighbor.1.0 == 0 || neighbor.1.0 == self.grid.dims.rows - 1 || neighbor.1.1 == 0 || neighbor.1.1 == self.grid.dims.columns - 1 {
+                        if neighbor.1.0 == 0 || neighbor.1.0 == self.grid.dims().rows - 1 || neighbor.1.1 == 0 || neighbor.1.1 == self.grid.dims().columns - 1 {
                             continue;
                         }
                         walls_to_add.push(neighbor.1)
@@ -79,12 +85,12 @@ impl Generator for RandPrims {
         }
     }
 
-    fn next_step(&mut self) -> Vec<CellKind> {
+    fn next_step(&mut self) ->  &dyn Grid {
         self.step_generation();
-        self.grid.cells.clone()
+        self.grid.as_ref()
     }
 
-    fn generate_maze(&mut self) -> Vec<CellKind> {
+    fn generate_maze(&mut self) -> &dyn Grid{
         loop {
             self.step_generation();
             if self.done {
@@ -93,7 +99,7 @@ impl Generator for RandPrims {
         }
         self.grid.set_cell(self.last_passage.0, self.last_passage.1, CellKind::Empty);
 
-        self.grid.cells.clone()
+        self.grid.as_ref()
     }
 
     fn is_done(&self) -> bool {

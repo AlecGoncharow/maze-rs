@@ -195,4 +195,8 @@ pub trait Grid {
     ) -> (usize, usize);
     fn set_cell(&mut self, row: usize, column: usize, kind: CellKind) -> CellKind;
     fn get_cell(&self, row: usize, column: usize) -> CellKind;
+    fn paths(&self) -> Vec<(usize, usize)>;
+    fn set_paths(&mut self, paths: Vec<(usize, usize)>);
+    fn add_wall_between(&mut self, one: (usize, usize), two: (usize, usize));
+    fn clear_wall_between(&mut self, one: (usize, usize), two: (usize, usize));
 }
