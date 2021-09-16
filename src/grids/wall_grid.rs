@@ -353,6 +353,7 @@ impl Grid for WallGrid {
 
     fn set_solver_kind(&mut self, kind: super::SolverKind) {
         self.solver_kind = kind;
+        self.reset_solver();
     }
 
     fn solve_path(&mut self) {
@@ -400,6 +401,10 @@ impl Grid for WallGrid {
             if index >= self.cells.len() {
                 break;
             }
+        }
+
+        if self.solver.is_none() {
+            self.reset_solver();
         }
 
         let solver = self.solver.as_mut().unwrap();

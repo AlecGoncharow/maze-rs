@@ -268,6 +268,7 @@ impl Grid for BlockGrid {
         self.start = None;
         self.goal = None;
         self.cursor = None;
+        self.reset_solver();
     }
 
     fn fill(&mut self) {
@@ -368,6 +369,12 @@ impl Grid for BlockGrid {
     fn step_solve_path(&mut self) -> bool {
         if self.start.is_none() || self.goal.is_none() {
             return false;
+        }
+
+        if let Some(solver) = self.solver.as_ref() {
+            if solver.is_solved() && self.cursor.is_none() {
+                self.reset_solver();
+            }
         }
 
         let start = self.start.unwrap();
@@ -479,6 +486,7 @@ impl Grid for BlockGrid {
 
     fn set_solver_kind(&mut self, kind: SolverKind) {
         self.solver_kind = kind;
+        self.reset_solver();
     }
 
     fn reset_solver(&mut self) {
